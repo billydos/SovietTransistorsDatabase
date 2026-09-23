@@ -1,19 +1,19 @@
 ---
 name: soviet-transistors
-description: Наполнение базы справочника советских транзисторов: формат jsonc-файлов (name, structure, parameters, ratings, extras), ограничения и валидация значений, а также команды консольной утилиты SovietTransistors. Использовать при добавлении транзисторов, заполнении параметров или работе с базой transistors.db.
+description: Наполнение базы справочника советских транзисторов: формат jsonc-файлов (name, structure, parameters, ratings, extras), ограничения и валидация значений, а также команды консольной утилиты SovietTransistorsDatabase. Использовать при добавлении транзисторов, заполнении параметров или работе с базой transistors.db.
 ---
 
-# Справочник советских транзисторов (SovietTransistors)
+# Справочник советских транзисторов (SovietTransistorsDatabase)
 
-Проект: `SovietTransistors/` (.NET 10, C#, SQLite). База по умолчанию — `transistors.db` рядом с проектом (UTF-8). Обозначения хранятся в таблице `transistors`, данные — в `transistor_attributes` (описательные атрибуты, 1:1), `manufacturers` + `transistor_manufacturers` (производители, M:N), `electrical_parameters`, `maximum_ratings` (все связаны по `id`, удаляются каскадно).
+Проект: `SovietTransistorsDatabase/` (.NET 10, C#, SQLite). База по умолчанию — `transistors.db` рядом с проектом (UTF-8). Обозначения хранятся в таблице `transistors`, данные — в `transistor_attributes` (описательные атрибуты, 1:1), `manufacturers` + `transistor_manufacturers` (производители, M:N), `electrical_parameters`, `maximum_ratings` (все связаны по `id`, удаляются каскадно).
 
 ## Запуск программы
 
 ```
-dotnet run --project SovietTransistors -- <команда> [аргументы] [--db <путь>] [--dry-run]
+dotnet run --project SovietTransistorsDatabase -- <команда> [аргументы] [--db <путь>] [--dry-run]
 ```
 ```
-SovietTransistors.exe <команда> [аргументы] [--db <путь>] [--dry-run]
+SovietTransistorsDatabase.exe <команда> [аргументы] [--db <путь>] [--dry-run]
 ```
 
 Опции можно указывать в любом месте команды. `--db` (или `--db=<путь>`) переопределяет путь к базе; иначе берётся переменная окружения `TRANSISTOR_DB`, иначе `./transistors.db`.

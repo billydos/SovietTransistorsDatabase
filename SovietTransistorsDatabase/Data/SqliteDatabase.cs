@@ -1,7 +1,7 @@
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
 
-namespace SovietTransistors.Data;
+namespace SovietTransistorsDatabase.Data;
 
 /// <summary>Реализация для SQLite: файл базы создаётся при первом обращении, хранение — UTF-8.</summary>
 public sealed class SqliteDatabase : RelationalTransistorDatabase

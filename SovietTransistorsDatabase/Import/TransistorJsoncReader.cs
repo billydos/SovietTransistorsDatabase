@@ -1,7 +1,7 @@
 using System.Text.Json;
-using SovietTransistors.Domain;
+using SovietTransistorsDatabase.Domain;
 
-namespace SovietTransistors.Import;
+namespace SovietTransistorsDatabase.Import;
 
 public sealed record JsoncIssue(int EntryIndex, string Description, string? Source);
 

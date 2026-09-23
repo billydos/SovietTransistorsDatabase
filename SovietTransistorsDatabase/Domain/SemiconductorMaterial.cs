@@ -1,4 +1,4 @@
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Тип материала полупроводника. Буква и цифра равнозначны.</summary>
 public enum SemiconductorMaterial

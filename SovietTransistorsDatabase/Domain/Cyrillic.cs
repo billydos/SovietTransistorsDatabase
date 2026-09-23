@@ -1,4 +1,4 @@
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 public static class Cyrillic
 {

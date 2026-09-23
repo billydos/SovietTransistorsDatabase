@@ -1,4 +1,4 @@
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Предельные эксплуатационные данные (единицы канонические: В, мА, мВт, мкс, °C, °C/Вт).</summary>
 public sealed record MaximumRatings

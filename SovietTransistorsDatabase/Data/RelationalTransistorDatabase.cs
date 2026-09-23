@@ -1,9 +1,9 @@
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
-using SovietTransistors.Domain;
+using SovietTransistorsDatabase.Domain;
 
-namespace SovietTransistors.Data;
+namespace SovietTransistorsDatabase.Data;
 
 /// <summary>
 /// Переносимая реляционная реализация: DML использует только стандартные конструкции

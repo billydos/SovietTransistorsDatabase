@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Text;
-using SovietTransistors.Data;
-using SovietTransistors.Domain;
-using SovietTransistors.Import;
+using SovietTransistorsDatabase.Data;
+using SovietTransistorsDatabase.Domain;
+using SovietTransistorsDatabase.Import;
 
-namespace SovietTransistors;
+namespace SovietTransistorsDatabase;
 
 internal static class Program
 {
@@ -581,7 +581,7 @@ internal static class Program
         Console.WriteLine("""
             Справочник советских транзисторов.
 
-            Использование: SovietTransistors <команда> [аргументы] [--db <путь>] [--dry-run]
+            Использование: SovietTransistorsDatabase <команда> [аргументы] [--db <путь>] [--dry-run]
 
             Команды:
               init                                 создать таблицы (выполняется и автоматически)
@@ -604,10 +604,10 @@ internal static class Program
               --modification=1..9   --chip=1..6   --limit=N
 
             Примеры:
-              SovietTransistors add КТ315Б
-              SovietTransistors import sample-data.jsonc
-              SovietTransistors info КТ315Б
-              SovietTransistors list --material=К --subclass=П
+              SovietTransistorsDatabase add КТ315Б
+              SovietTransistorsDatabase import sample-data.jsonc
+              SovietTransistorsDatabase info КТ315Б
+              SovietTransistorsDatabase list --material=К --subclass=П
 
             Формат обозначения: <материал><подкласс>[С]<признак><номер><буквы>[<модификация>][-<бескорп.>]
               материал:   Г/1 — германий, К/2 — кремний, А/3 — арсенид галлия, И/4 — индий

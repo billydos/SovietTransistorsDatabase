@@ -1,6 +1,6 @@
-using SovietTransistors.Domain;
+using SovietTransistorsDatabase.Domain;
 
-namespace SovietTransistors.Data;
+namespace SovietTransistorsDatabase.Data;
 
 public enum InsertOutcome
 {

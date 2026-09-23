@@ -4,7 +4,7 @@ obj/
 publish*/
 
 # База данных — генерируется из sample-data.jsonc:
-#   dotnet run --project SovietTransistors -- import SovietTransistors/sample-data.jsonc
+#   dotnet run --project SovietTransistorsDatabase -- import SovietTransistorsDatabase/sample-data.jsonc
 transistors.db
 *.db
 

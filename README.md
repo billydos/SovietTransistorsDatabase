@@ -1,4 +1,4 @@
-# SovietTransistors - справочник советских транзисторов
+# SovietTransistorsDatabase - справочник советских транзисторов
 
 Консольная утилита для ведения локальной базы справочника советских полупроводниковых приборов. Хранит структуру обозначения (ГОСТ 10862-64), электрические параметры с условиями измерения, предельные эксплуатационные данные и описательные атрибуты (проводимость, корпус, технология, производитель, годы выпуска и др.). База - SQLite (UTF-8), с заделом на будущий перенос на PostgreSQL/MariaDB.
 
@@ -17,15 +17,15 @@
 
 ```shell
 # сборка и проверка работоспособности
-dotnet run --project SovietTransistors -- parse КТ315Б
+dotnet run --project SovietTransistorsDatabase -- parse КТ315Б
 
 # наполнение базы из файла с примерами (20 транзисторов)
-dotnet run --project SovietTransistors -- import SovietTransistors/sample-data.jsonc
+dotnet run --project SovietTransistorsDatabase -- import SovietTransistorsDatabase/sample-data.jsonc
 
 # просмотр
-dotnet run --project SovietTransistors -- count
-dotnet run --project SovietTransistors -- list
-dotnet run --project SovietTransistors -- info КТ315Б
+dotnet run --project SovietTransistorsDatabase -- count
+dotnet run --project SovietTransistorsDatabase -- list
+dotnet run --project SovietTransistorsDatabase -- info КТ315Б
 ```
 
 ## Команды
@@ -47,10 +47,10 @@ dotnet run --project SovietTransistors -- info КТ315Б
 Примеры:
 
 ```shell
-dotnet run --project SovietTransistors -- add ГТ404А КП303Е
-dotnet run --project SovietTransistors -- list --material=1 --subclass=Т
-dotnet run --project SovietTransistors -- info 2Т914А-1
-dotnet run --project SovietTransistors -- find 1Т402Ж
+dotnet run --project SovietTransistorsDatabase -- add ГТ404А КП303Е
+dotnet run --project SovietTransistorsDatabase -- list --material=1 --subclass=Т
+dotnet run --project SovietTransistorsDatabase -- info 2Т914А-1
+dotnet run --project SovietTransistorsDatabase -- find 1Т402Ж
 ```
 
 ## Примеры выполнения
@@ -58,7 +58,7 @@ dotnet run --project SovietTransistors -- find 1Т402Ж
 `list` - таблица обозначений (с фильтрами и `--limit`):
 
 ```text
-$ dotnet run --project SovietTransistors -- list --limit=3
+$ dotnet run --project SovietTransistorsDatabase -- list --limit=3
 Обозначение  Материал    Подкл.  Сборка  Признак  №   Буквы  Мод.  Бескорп.
 -----------  ----------  ------  ------  -------  --  -----  ----  --------
 КП302А       К кремний   П       -       3        02  А      -     -
@@ -70,7 +70,7 @@ $ dotnet run --project SovietTransistors -- list --limit=3
 `info` - полная карточка транзистора (данные КТ315Б и КТ3107В - по справочнику eandc.ru):
 
 ```text
-$ dotnet run --project SovietTransistors -- info КТ315Б
+$ dotnet run --project SovietTransistorsDatabase -- info КТ315Б
 Обозначение:      КТ315Б
 Материал:         К - кремний (К/2)
 Подкласс:         Т - биполярный
@@ -107,7 +107,7 @@ $ dotnet run --project SovietTransistors -- info КТ315Б
 ```
 
 ```text
-$ dotnet run --project SovietTransistors -- info КТ3107В
+$ dotnet run --project SovietTransistorsDatabase -- info КТ3107В
 Обозначение:      КТ3107В
 Материал:         К - кремний (К/2)
 Подкласс:         Т - биполярный
@@ -143,7 +143,7 @@ $ dotnet run --project SovietTransistors -- info КТ3107В
 `find` - поиск с учётом равнозначности материалов: `2Т315Б` находит запись `КТ315Б` (цифра 2 равнозначна букве К):
 
 ```text
-$ dotnet run --project SovietTransistors -- find 2Т315Б
+$ dotnet run --project SovietTransistorsDatabase -- find 2Т315Б
 Обозначение:      КТ315Б
 Материал:         К - кремний (К/2)
 Подкласс:         Т - биполярный
@@ -158,7 +158,7 @@ $ dotnet run --project SovietTransistors -- find 2Т315Б
 `add` - добавление по обозначению: новый транзистор, дубликат и старая система «П...» (не поддерживается):
 
 ```text
-$ dotnet run --project SovietTransistors -- add КТ361А 2Т315Б МП16А
+$ dotnet run --project SovietTransistorsDatabase -- add КТ361А 2Т315Б МП16А
 МП16А: позиция 1: ожидался тип материала - Г или 1 (германий), К или 2 (кремний), А или 3 (арсенид галлия), И или 4 (индий), получено «М»
 Добавлено: КТ361А
 Пропущено (уже есть): 2Т315Б
@@ -230,18 +230,18 @@ $ dotnet run --project SovietTransistors -- add КТ361А 2Т315Б МП16А
 Полный справочник кодов параметров, правил условий, единиц измерения и полей секций:
 
 ```shell
-dotnet run --project SovietTransistors -- help
+dotnet run --project SovietTransistorsDatabase -- help
 ```
 
-а также файл `SovietTransistors/sample-data.jsonc` (полный пример) и регламент `.kilo/skills/soviet-transistors/SKILL.md`.
+а также файл `SovietTransistorsDatabase/sample-data.jsonc` (полный пример) и регламент `.kilo/skills/soviet-transistors/SKILL.md`.
 
 ## Сборка и публикация
 
 ```shell
-dotnet build SovietTransistors/SovietTransistors.csproj -c Release
+dotnet build SovietTransistorsDatabase/SovietTransistorsDatabase.csproj -c Release
 
 # один exe (требует установленного .NET runtime)
-dotnet publish SovietTransistors/SovietTransistors.csproj -c Release -r win-x64 `
+dotnet publish SovietTransistorsDatabase/SovietTransistorsDatabase.csproj -c Release -r win-x64 `
   --self-contained false -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true -o publish-single
 ```
@@ -249,7 +249,7 @@ dotnet publish SovietTransistors/SovietTransistors.csproj -c Release -r win-x64 
 ## Структура проекта
 
 ```
-SovietTransistors/
+SovietTransistorsDatabase/
   Program.cs                  CLI
   Domain/                     обозначения, параметры, ratings, атрибуты, валидация
   Data/                       реляционное ядро + SQLite (DDL, DML)

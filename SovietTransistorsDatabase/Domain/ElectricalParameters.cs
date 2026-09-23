@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 public enum ParameterKind
 {

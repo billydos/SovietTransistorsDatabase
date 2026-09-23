@@ -1,4 +1,4 @@
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Разбор обозначения транзистора, например КТ315Б или 2Т914А-1.</summary>
 public static class TransistorNameParser

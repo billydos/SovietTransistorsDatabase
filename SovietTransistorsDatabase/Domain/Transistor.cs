@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Советский транзистор по системе обозначений (ГОСТ 10862).</summary>
 public sealed record Transistor

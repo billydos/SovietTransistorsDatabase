@@ -1,4 +1,4 @@
-namespace SovietTransistors.Domain;
+namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Описательные атрибуты транзистора (не измеримые величины). null — не задано.</summary>
 public sealed record TransistorAttributes
