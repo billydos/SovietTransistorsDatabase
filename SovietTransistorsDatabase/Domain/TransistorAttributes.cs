@@ -3,22 +3,22 @@ namespace SovietTransistorsDatabase.Domain;
 /// <summary>Описательные атрибуты транзистора (не измеримые величины). null — не задано.</summary>
 public sealed record TransistorAttributes
 {
-    /// <summary>Структура проводимости: npn, pnp, n-fet, p-fet…</summary>
+    /// <summary>Структура проводимости: npn, pnp, n-fet, p-fet...</summary>
     public string? Structure { get; init; }
 
-    /// <summary>Технология изготовления: сплавная, сплавно-диффузионная, планарная…</summary>
+    /// <summary>Технология изготовления: сплавная, сплавно-диффузионная, планарная...</summary>
     public string? Technology { get; init; }
 
-    /// <summary>Корпус: «КТ-13», «TO-92»…</summary>
+    /// <summary>Корпус: «КТ-13», «TO-92»...</summary>
     public string? Package { get; init; }
 
-    /// <summary>Материал корпуса: металл, металлокерамика, пластик…</summary>
+    /// <summary>Материал корпуса: металл, металлокерамика, пластик...</summary>
     public string? PackageMaterial { get; init; }
 
-    /// <summary>Цветовая маркировка (когда обозначения на корпусе нет): «красный», «жёлтая точка»…</summary>
+    /// <summary>Цветовая маркировка (когда обозначения на корпусе нет): «красный», «жёлтая точка»...</summary>
     public string? ColorMarking { get; init; }
 
-    /// <summary>Цоколёвка: «КБЭ», «1-Э 2-К 3-Б»…</summary>
+    /// <summary>Цоколёвка: «КБЭ», «1-Э 2-К 3-Б»...</summary>
     public string? Pinout { get; init; }
 
     /// <summary>Повышенная чувствительность к статическому напряжению.</summary>
@@ -30,7 +30,7 @@ public sealed record TransistorAttributes
     /// <summary>Радиационная стойкость.</summary>
     public bool? RadiationHardened { get; init; }
 
-    /// <summary>Обозначение ТУ/ОТУ: «ТУ 11.365.001-71»…</summary>
+    /// <summary>Обозначение ТУ/ОТУ: «ТУ 11.365.001-71»...</summary>
     public string? Tu { get; init; }
 
     /// <summary>Примечание свободным текстом.</summary>

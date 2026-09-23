@@ -85,7 +85,7 @@ public static class TransistorJsoncReader
             JsonElement root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
-                throw new FormatException("корневой элемент должен быть объектом вида { \"transistors\": [ … ] }");
+                throw new FormatException("корневой элемент должен быть объектом вида { \"transistors\": [ ... ] }");
             }
             foreach (JsonProperty property in root.EnumerateObject())
             {

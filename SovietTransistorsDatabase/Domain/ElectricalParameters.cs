@@ -256,7 +256,7 @@ public static class ParameterText
         ParameterInfo info = ElectricalParameterCatalog.Info(parameter.Kind);
         string unit = info.Unit is null ? "" : " " + info.Unit;
         if (parameter.ValueMin is double min && parameter.ValueMax is double max)
-            return $"{Fmt(min)}…{Fmt(max)}{unit}";
+            return $"{Fmt(min)}...{Fmt(max)}{unit}";
         if (parameter.ValueMin is double lower)
             return $"не менее {Fmt(lower)}{unit}";
         if (parameter.ValueMax is double upper)

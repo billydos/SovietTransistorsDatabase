@@ -586,12 +586,12 @@ internal static class Program
             Команды:
               init                                 создать таблицы (выполняется и автоматически)
               import <файл.jsonc>                  импорт: обозначения, атрибуты, параметры, предельные данные
-              add <обозначение> [<обозначение>…]   добавить транзисторы по обозначению (через парсер)
-              parse <обозначение>…                 разобрать обозначение без обращения к базе
+              add <обозначение> [<обозначение>...]   добавить транзисторы по обозначению (через парсер)
+              parse <обозначение>...                 разобрать обозначение без обращения к базе
               list [фильтры]                       вывести обозначения из базы
               info <обозначение>                   карточка: атрибуты, параметры, предельные данные
               find <обозначение>                   найти запись (учитывает равнозначность Г/1, К/2, А/3, И/4)
-              delete <обозначение>…                удалить записи (каскадно с параметрами и предельными)
+              delete <обозначение>...                удалить записи (каскадно с параметрами и предельными)
               count                                количество записей
 
             Опции:
@@ -629,7 +629,7 @@ internal static class Program
               Tauk, h21b: Ukb+Ie; Ton/Toff: Ik+Ib; KShum: пара + freq + [Rg];
               PVyh/KUr/Kpd: freq + (Uke+Ik вместе или не заданы)
               min/max — значение, условия: Uke/Ukb/Ueb (В), Ik/Ie/Ib (мА), freq (МГц), Rg/Rbe (Ом), temp (°C).
-            Атрибуты (jsonc, ключ "attributes"): structure (npn/pnp/n-fet…), technology, package,
+            Атрибуты (jsonc, ключ "attributes"): structure (npn/pnp/n-fet...), technology, package,
               packageMaterial, colorMarking, pinout, esdSensitive/militaryGrade/radiationHardened (bool),
               tu, notes, yearFrom/yearTo (1949–2100), massMax (г), datasheetUrl;
               manufacturers — массив названий заводов (null — не менять, [] — очистить).
