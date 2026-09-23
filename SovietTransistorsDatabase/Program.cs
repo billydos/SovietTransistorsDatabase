@@ -274,7 +274,7 @@ internal static class Program
         if (options.TryGetValue("--limit", out string? limitValue))
             query = query with { Limit = ParseIntOption("--limit", limitValue, 1, int.MaxValue) };
 
-        using ITransistorDatabase db = OpenDatabase(dbPath);
+        using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         IReadOnlyList<Transistor> rows = db.Query(query);
         PrintTable(rows);
         Console.WriteLine($"Записей: {rows.Count}");
@@ -289,7 +289,7 @@ internal static class Program
             return 1;
         }
         Transistor transistor = TransistorNameParser.Parse(names[0]);
-        using ITransistorDatabase db = OpenDatabase(dbPath);
+        using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         int? id = db.FindId(transistor);
         if (id is null)
         {
@@ -375,7 +375,7 @@ internal static class Program
             return 1;
         }
         Transistor query = TransistorNameParser.Parse(names[0]);
-        using ITransistorDatabase db = OpenDatabase(dbPath);
+        using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         Transistor? found = db.FindEquivalent(query);
         if (found is null)
         {
@@ -420,7 +420,7 @@ internal static class Program
 
         int removed = 0;
         int notFound = 0;
-        using ITransistorDatabase db = OpenDatabase(dbPath);
+        using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         foreach (Transistor transistor in valid)
         {
             if (db.Delete(transistor))
@@ -440,7 +440,7 @@ internal static class Program
 
     private static int CmdCount(string? dbPath)
     {
-        using ITransistorDatabase db = OpenDatabase(dbPath);
+        using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         Console.WriteLine(db.CountAll());
         return 0;
     }
@@ -450,6 +450,17 @@ internal static class Program
         var database = new SqliteDatabase(ResolveDatabasePath(dbPath));
         database.EnsureCreated();
         return database;
+    }
+
+    private static ITransistorDatabase OpenExistingDatabase(string? dbPath)
+    {
+        string path = ResolveDatabasePath(dbPath);
+        if (!File.Exists(path))
+        {
+            throw new InvalidOperationException(
+                $"база данных не найдена: {Path.GetFullPath(path)} (сначала выполните init или import)");
+        }
+        return OpenDatabase(path);
     }
 
     private static string ResolveDatabasePath(string? dbPath) =>
@@ -584,7 +595,7 @@ internal static class Program
             Использование: SovietTransistorsDatabase <команда> [аргументы] [--db <путь>] [--dry-run]
 
             Команды:
-              init                                 создать таблицы (выполняется и автоматически)
+              init                                 создать таблицы (команды записи создают базу автоматически)
               import <файл.jsonc>                  импорт: обозначения, атрибуты, параметры, предельные данные
               add <обозначение> [<обозначение>...]   добавить транзисторы по обозначению (через парсер)
               parse <обозначение>...                 разобрать обозначение без обращения к базе
@@ -597,6 +608,7 @@ internal static class Program
             Опции:
               --db <путь>     путь к базе SQLite (по умолчанию ./transistors.db или переменная TRANSISTOR_DB)
               --dry-run       только проверка, без записи в базу
+              Команды list/info/find/count/delete работают только с существующей базой (не создают её)
 
             Фильтры list (--опция=значение или --опция значение):
               --material=Г|1|К|2|А|3|И|4   --subclass=Т|П   --assembly=true|false
