@@ -1,0 +1,5 @@
+* text=auto
+*.jsonc text
+*.md text
+*.cs text diff=csharp
+*.csproj text

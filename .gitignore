@@ -1,0 +1,12 @@
+# Сборочные артефакты
+bin/
+obj/
+publish*/
+
+# База данных — генерируется из sample-data.jsonc:
+#   dotnet run --project SovietTransistors -- import SovietTransistors/sample-data.jsonc
+transistors.db
+*.db
+
+# Состояние UI Agent Manager
+.kilo/agent-manager.json
