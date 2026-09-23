@@ -1,0 +1,10 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+  "graphify": {
+    "type": "local",
+    "command": ["graphify-mcp", "graphify-out/graph.json"],
+    "enabled": true
+  }
+}
+}

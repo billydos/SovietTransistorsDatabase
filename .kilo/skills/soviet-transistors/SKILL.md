@@ -1,5 +1,5 @@
 ---
-name: soviet-transistors
+name: soviet-transistors-database
 description: Наполнение базы справочника советских транзисторов: формат jsonc-файлов (name, structure, parameters, ratings, extras), ограничения и валидация значений, а также команды консольной утилиты SovietTransistorsDatabase. Использовать при добавлении транзисторов, заполнении параметров или работе с базой transistors.db.
 ---
 
