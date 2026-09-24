@@ -42,8 +42,8 @@ public interface ITransistorDatabase : IDisposable
     void EnsureCreated();
     InsertOutcome Add(Transistor transistor);
     UpsertOutcome Save(Transistor transistor, TransistorDetails? details);
-    Transistor? FindEquivalent(Transistor transistor);
     int? FindId(Transistor transistor);
+    IReadOnlyList<Transistor> FindMaterialEquivalents(Transistor transistor);
     bool Delete(Transistor transistor);
     int CountAll();
     IReadOnlyList<Transistor> Query(TransistorQuery query);

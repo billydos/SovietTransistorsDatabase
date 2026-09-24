@@ -102,14 +102,23 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         return outcome;
     }
 
-    public Transistor? FindEquivalent(Transistor transistor)
-    {
-        return FindEquivalentCore(Connection, transaction: null, transistor);
-    }
-
     public int? FindId(Transistor transistor)
     {
         return FindIdCore(Connection, transaction: null, transistor);
+    }
+
+    public IReadOnlyList<Transistor> FindMaterialEquivalents(Transistor transistor)
+    {
+        using DbCommand command = Connection.CreateCommand();
+        command.CommandText = "SELECT " + TransistorColumns + " FROM transistors WHERE "
+            + BuildMaterialCounterpartMatch(command, transistor);
+        using DbDataReader reader = command.ExecuteReader();
+        var rows = new List<Transistor>();
+        while (reader.Read())
+        {
+            rows.Add(ReadTransistor(reader));
+        }
+        return rows;
     }
 
     public bool Delete(Transistor transistor)
@@ -120,7 +129,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         using (DbCommand command = connection.CreateCommand())
         {
             command.Transaction = transaction;
-            command.CommandText = "DELETE FROM transistors WHERE " + BuildEquivalence(command, transistor);
+            command.CommandText = "DELETE FROM transistors WHERE " + BuildExactMatch(command, transistor);
             removed = command.ExecuteNonQuery();
         }
         transaction.Commit();
@@ -399,25 +408,16 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     {
         using DbCommand command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT Id FROM transistors WHERE " + BuildEquivalence(command, transistor) + " LIMIT 1";
+        command.CommandText = "SELECT Id FROM transistors WHERE " + BuildExactMatch(command, transistor);
         object? result = command.ExecuteScalar();
         return result is null || result is DBNull ? null : Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
-    private Transistor? FindEquivalentCore(DbConnection connection, DbTransaction? transaction, Transistor transistor)
-    {
-        using DbCommand command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = "SELECT " + TransistorColumns + " FROM transistors WHERE " + BuildEquivalence(command, transistor) + " LIMIT 1";
-        using DbDataReader reader = command.ExecuteReader();
-        return reader.Read() ? ReadTransistor(reader) : null;
-    }
-
     /// <summary>
-    /// Вставка «если нет эквивалентной записи»: одна команда вместо «найти, затем вставить» —
-    /// без гонки на дубликат и без лишнего SELECT. Эквивалентность учитывает пары материалов
-    /// (Г/1, К/2, А/3, И/4), то есть строже UNIQUE-ограничения uq_transistor.
-    /// Возвращает false, если эквивалентная запись уже существует (ничего не вставлено).
+    /// Вставка «если нет точной записи»: одна команда вместо «найти, затем вставить» —
+    /// без гонки на дубликат и без лишнего SELECT. Предикат тождества совпадает с
+    /// UNIQUE-ограничением uq_transistor.
+    /// Возвращает false, если запись уже существует (ничего не вставлено).
     /// </summary>
     private static bool InsertTransistorIfAbsent(DbConnection connection, DbTransaction? transaction, Transistor transistor)
     {
@@ -431,7 +431,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             SELECT @material, @subclass, @assembly, @feature, @dev_number, @letters, @modification, @chip_variant
             FROM (SELECT 1) AS src
             WHERE NOT EXISTS (SELECT 1 FROM transistors WHERE
-            """ + " " + BuildEquivalence(command, transistor) + ")";
+            """ + " " + BuildExactMatch(command, transistor) + ")";
         AddParameter(command, "@material", transistor.Material.ToString());
         AddParameter(command, "@subclass", transistor.Subclass.ToString());
         AddParameter(command, "@assembly", transistor.IsAssembly ? "С" : DBNull.Value);
@@ -707,27 +707,36 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     private static object Box(double? value) => value is double v ? v : DBNull.Value;
 
-    private static string BuildEquivalence(DbCommand command, Transistor t)
+    private static string BuildExactMatch(DbCommand command, Transistor t)
+    {
+        AddParameter(command, "@eqMaterial", t.Material.ToString());
+        return "Material = @eqMaterial AND " + AppendDesignationColumns(command, t, "@eq");
+    }
+
+    private static string BuildMaterialCounterpartMatch(DbCommand command, Transistor t)
     {
         (char letter, char digit) = Materials.SymbolsOf(Materials.KindOf(t.Material));
-        AddParameter(command, "@eqMatLetter", letter.ToString());
-        AddParameter(command, "@eqMatDigit", digit.ToString());
-        AddParameter(command, "@eqSubclass", t.Subclass.ToString());
-        AddParameter(command, "@eqFeature", t.Feature);
-        AddParameter(command, "@eqDevNumber", t.DevelopmentNumber);
-        AddParameter(command, "@eqLetters", t.Letters);
-        AddParameter(command, "@eqAssembly", t.IsAssembly ? "С" : DBNull.Value);
-        AddParameter(command, "@eqModification", t.Modification is int m ? m : DBNull.Value);
-        AddParameter(command, "@eqChipVariant", t.ChipVariant is int c ? c : DBNull.Value);
-        return """
-            Material IN (@eqMatLetter, @eqMatDigit)
-            AND Subclass = @eqSubclass
-            AND Feature = @eqFeature
-            AND DevNumber = @eqDevNumber
-            AND Letters = @eqLetters
-            AND COALESCE(Assembly, '') = COALESCE(@eqAssembly, '')
-            AND COALESCE(Modification, -1) = COALESCE(@eqModification, -1)
-            AND COALESCE(ChipVariant, -1) = COALESCE(@eqChipVariant, -1)
+        AddParameter(command, "@cpMaterial", (t.Material == letter ? digit : letter).ToString());
+        return "Material = @cpMaterial AND " + AppendDesignationColumns(command, t, "@cp");
+    }
+
+    private static string AppendDesignationColumns(DbCommand command, Transistor t, string p)
+    {
+        AddParameter(command, p + "Subclass", t.Subclass.ToString());
+        AddParameter(command, p + "Feature", t.Feature);
+        AddParameter(command, p + "DevNumber", t.DevelopmentNumber);
+        AddParameter(command, p + "Letters", t.Letters);
+        AddParameter(command, p + "Assembly", t.IsAssembly ? "С" : DBNull.Value);
+        AddParameter(command, p + "Modification", t.Modification is int m ? m : DBNull.Value);
+        AddParameter(command, p + "ChipVariant", t.ChipVariant is int c ? c : DBNull.Value);
+        return $"""
+            Subclass = {p}Subclass
+            AND Feature = {p}Feature
+            AND DevNumber = {p}DevNumber
+            AND Letters = {p}Letters
+            AND (Assembly = {p}Assembly OR (Assembly IS NULL AND {p}Assembly IS NULL))
+            AND (Modification = {p}Modification OR (Modification IS NULL AND {p}Modification IS NULL))
+            AND (ChipVariant = {p}ChipVariant OR (ChipVariant IS NULL AND {p}ChipVariant IS NULL))
             """;
     }
 

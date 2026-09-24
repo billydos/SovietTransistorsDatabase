@@ -1,6 +1,9 @@
 namespace SovietTransistorsDatabase.Domain;
 
-/// <summary>Тип материала полупроводника. Буква и цифра равнозначны.</summary>
+/// <summary>
+/// Тип материала полупроводника. Буква и цифра равнозначны как физический материал,
+/// но не как ключ записи: КТ312 и 2Т312 — разные записи с собственными данными.
+/// </summary>
 public enum SemiconductorMaterial
 {
     Germanium,
@@ -42,7 +45,7 @@ public static class Materials
             ? kind
             : throw new ArgumentException($"«{symbol}» не является обозначением материала (Г/1, К/2, А/3, И/4)");
 
-    /// <summary>Оба равнозначных символа материала, например Г и 1.</summary>
+    /// <summary>Оба равнозначных символа материала, например Г и 1. Нужен фильтрам и отображению, не тождеству записи.</summary>
     public static (char Letter, char Digit) SymbolsOf(SemiconductorMaterial kind) => SymbolPairs[kind];
 
     public static string ShortName(SemiconductorMaterial kind) => kind switch

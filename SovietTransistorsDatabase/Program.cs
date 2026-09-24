@@ -376,14 +376,20 @@ internal static class Program
         }
         Transistor query = TransistorNameParser.Parse(names[0]);
         using ITransistorDatabase db = OpenExistingDatabase(dbPath);
-        Transistor? found = db.FindEquivalent(query);
-        if (found is null)
+        if (db.FindId(query) is not null)
         {
-            Console.WriteLine($"Не найдено: {query.Name}");
-            return 1;
+            PrintTransistor(query);
+            return 0;
         }
-        PrintTransistor(found);
-        return 0;
+        Console.WriteLine($"Не найдено: {query.Name}");
+        IReadOnlyList<Transistor> equivalents = db.FindMaterialEquivalents(query);
+        if (equivalents.Count > 0)
+        {
+            Console.WriteLine(
+                $"Есть равнозначная по материалу запись: {string.Join(", ", equivalents.Select(e => e.Name))} " +
+                "(символы Г/1, К/2, А/3, И/4 обозначают один материал, но записи раздельные)");
+        }
+        return 1;
     }
 
     private static int CmdDelete(List<string> names, string? dbPath, bool dryRun)
@@ -628,7 +634,8 @@ internal static class Program
               parse <обозначение>...                 разобрать обозначение без обращения к базе
               list [фильтры]                       вывести обозначения из базы
               info <обозначение>                   карточка: атрибуты, параметры, предельные данные
-              find <обозначение>                   найти запись (учитывает равнозначность Г/1, К/2, А/3, И/4)
+              find <обозначение>                   найти запись по точному обозначению (при отсутствии —
+                                                   подсказка равнозначной по материалу: Г/1, К/2, А/3, И/4)
               delete <обозначение>...                удалить записи (каскадно с параметрами и предельными)
               count                                количество записей
 
