@@ -25,12 +25,9 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     private static readonly string[] TransistorColumns =
         ["Material", "Subclass", "Assembly", "Feature", "DevNumber", "Letters", "Modification", "ChipVariant"];
 
-    private static readonly string[] AttributeColumns =
-    [
-        "Structure", "Technology", "Package", "PackageMaterial", "ColorMarking", "Pinout",
-        "EsdSensitive", "MilitaryGrade", "RadiationHardened", "Tu", "Notes",
-        "YearFrom", "YearTo", "MassMax", "DatasheetUrl"
-    ];
+    // Список полей атрибутов — не копия, а TransistorAttributes.FieldNames (единый источник
+    // вместе с chk_any_attribute и проверкой «задано хоть одно поле»).
+    private static readonly string[] AttributeColumns = [.. TransistorAttributes.FieldNames];
 
     private static readonly string[] RatingColumns =
     [
@@ -105,7 +102,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         {
             if (details.Attributes is { } attributes)
             {
-                if (HasAnyAttributeField(attributes))
+                if (TransistorAttributes.HasAnyValue(attributes))
                 {
                     SetAttributesCore(connection, transaction, id, attributes);
                 }
@@ -491,13 +488,6 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     /// PostgreSQL — lastval(), MariaDB — LAST_INSERT_ID()), переопределяется вместе с OpenConnection().
     /// </summary>
     protected abstract string LastInsertIdSql { get; }
-
-    private static bool HasAnyAttributeField(TransistorAttributes a) =>
-        a.Structure is not null || a.Technology is not null || a.Package is not null
-        || a.PackageMaterial is not null || a.ColorMarking is not null || a.Pinout is not null
-        || a.EsdSensitive is not null || a.MilitaryGrade is not null || a.RadiationHardened is not null
-        || a.Tu is not null || a.Notes is not null || a.YearFrom is not null || a.YearTo is not null
-        || a.MassMax is not null || a.DatasheetUrl is not null;
 
     private static void ClearAttributesCore(DbConnection connection, DbTransaction transaction, int transistorId)
     {

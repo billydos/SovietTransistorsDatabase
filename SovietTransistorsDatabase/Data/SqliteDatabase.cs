@@ -43,7 +43,7 @@ public sealed class SqliteDatabase : RelationalTransistorDatabase
     // в текущем соединении (используется сразу после INSERT).
     protected override string LastInsertIdSql => "SELECT last_insert_rowid()";
 
-    protected override string CreateTableSql => """
+    protected override string CreateTableSql => $"""
         CREATE TABLE IF NOT EXISTS transistors (
             Id            INTEGER PRIMARY KEY AUTOINCREMENT, -- id не переиспользуются после delete — не убирать AUTOINCREMENT
             Material      TEXT    NOT NULL,     -- 1. материал: Г|1, К|2, А|3, И|4
@@ -59,6 +59,10 @@ public sealed class SqliteDatabase : RelationalTransistorDatabase
             CONSTRAINT chk_assembly     CHECK (Assembly IN (0, 1)),
             CONSTRAINT chk_feature      CHECK (Feature BETWEEN 1 AND 9),
             CONSTRAINT chk_dev_number   CHECK (DevNumber BETWEEN 1 AND 999),
+            -- chk_letters — сознательно слабее домена (TransistorValidator/Cyrillic.IsUpperLetters
+            -- требуют 1–2 заглавных кириллических): переносимого предиката для CHECK у целевых СУБД нет
+            -- (GLOB — только SQLite; LENGTH() в MariaDB считает октеты; MariaDB запрещает regex в CHECK).
+            -- CHECK отсекает лишь пустую строку; полную проверку выполняет домен. Не «усиливать».
             CONSTRAINT chk_letters      CHECK (Letters <> ''),
             CONSTRAINT chk_modification CHECK (Modification IS NULL OR (Modification BETWEEN 1 AND 9)),
             CONSTRAINT chk_chip_variant CHECK (ChipVariant IS NULL OR (ChipVariant BETWEEN 1 AND 6)),
@@ -92,11 +96,7 @@ public sealed class SqliteDatabase : RelationalTransistorDatabase
             ),
             CONSTRAINT chk_mass CHECK (MassMax IS NULL OR MassMax > 0),
             CONSTRAINT chk_any_attribute CHECK (
-                Structure IS NOT NULL OR Technology IS NOT NULL OR Package IS NOT NULL
-                OR PackageMaterial IS NOT NULL OR ColorMarking IS NOT NULL OR Pinout IS NOT NULL
-                OR EsdSensitive IS NOT NULL OR MilitaryGrade IS NOT NULL OR RadiationHardened IS NOT NULL
-                OR Tu IS NOT NULL OR Notes IS NOT NULL OR YearFrom IS NOT NULL OR YearTo IS NOT NULL
-                OR MassMax IS NOT NULL OR DatasheetUrl IS NOT NULL
+                {AttributesDdl.AnyAttributeCheckSql()}
             )
         );
 

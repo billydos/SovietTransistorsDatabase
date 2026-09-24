@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace SovietTransistorsDatabase.Domain;
 
 /// <summary>Описательные атрибуты транзистора (не измеримые величины). null — не задано.</summary>
@@ -47,6 +49,16 @@ public sealed record TransistorAttributes
 
     /// <summary>Ссылка на документацию (скан даташита).</summary>
     public string? DatasheetUrl { get; init; }
+
+    // Единый источник списка полей атрибутов: имена свойств записи совпадают с колонками БД.
+    private static readonly PropertyInfo[] Fields = typeof(TransistorAttributes).GetProperties();
+
+    /// <summary>Имена всех полей записи. Из этого списка генерируются SELECT спецификации чтения, CHECK chk_any_attribute и проверка «задано хоть одно поле».</summary>
+    public static readonly IReadOnlyList<string> FieldNames = [.. Fields.Select(p => p.Name)];
+
+    /// <summary>Задано ли хотя бы одно поле (null во всех полях — секция пуста).</summary>
+    public static bool HasAnyValue(TransistorAttributes attributes) =>
+        Fields.Any(p => p.GetValue(attributes) is not null);
 }
 
 public static class TransistorAttributesValidator
