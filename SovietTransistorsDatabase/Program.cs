@@ -48,6 +48,12 @@ internal static class Program
             {
                 rest.Add(arg);
             }
+
+            if (dbPath == "")
+            {
+                Console.Error.WriteLine("Ошибка: путь к файлу базы не может быть пустым");
+                return 1;
+            }
         }
 
         if (command is null)
@@ -611,7 +617,7 @@ internal static class Program
             };
             string line = $"  {info.Code} ({unit}) — {info.DisplayName}: {bounds}; условия: {info.Conditions.Describe()}";
             if (info.ValueCeiling is double ceiling)
-                line += $" (не более {ParameterText.Fmt(ceiling)} {info.Unit})";
+                line += $" (не более {ParameterText.Fmt(ceiling)} {unit})";
             lines.Add(line);
         }
         string conditionKeys = string.Join(", ", ConditionKeys.All
@@ -642,7 +648,8 @@ internal static class Program
             Опции:
               --db <путь>     путь к базе SQLite (по умолчанию ./transistors.db или переменная TRANSISTOR_DB)
               --dry-run       только проверка, без записи в базу
-              Команды list/info/find/count/delete работают только с существующей базой (не создают её)
+
+            Команды list/info/find/count/delete работают только с существующей базой (не создают её)
 
             Фильтры list (--опция=значение или --опция значение):
               --material=Г|1|К|2|А|3|И|4   --subclass=Т|П   --assembly=true|false
