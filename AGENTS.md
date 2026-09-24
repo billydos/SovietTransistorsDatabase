@@ -16,9 +16,12 @@ dotnet run --project SovietTransistorsDatabase -- import SovietTransistorsDataba
 
 # проверка jsonc без записи в базу
 dotnet run --project SovietTransistorsDatabase -- import <файл.jsonc> --dry-run
+
+# unit-тесты Domain (xUnit)
+dotnet test SovietTransistorsDatabase.Tests/SovietTransistorsDatabase.Tests.csproj -c Release
 ```
 
-Команды CLI: `init`, `import`, `add`, `parse`, `list`, `info`, `find`, `delete`, `count` (полный справочник — `help` и README.md). Тестового фреймворка нет; QA — сценарные прогоны (импорт + негативные случаи, `info`, эквивалентность материалов, каскадное удаление, exit-коды).
+Команды CLI: `init`, `import`, `add`, `parse`, `list`, `info`, `find`, `delete`, `count` (полный справочник — `help` и README.md). Unit-тесты Domain (xUnit, `SovietTransistorsDatabase.Tests/`) покрывают парсер обозначений, валидаторы (каждая `ConditionRule`) и каталог параметров — прогонять при правках `Domain/`. Сценарные прогоны остаются QA для CLI и БД (импорт + негативные случаи, `info`, эквивалентность материалов, каскадное удаление, exit-коды).
 
 ## Структура
 
@@ -29,6 +32,9 @@ SovietTransistorsDatabase/
   Data/               RelationalTransistorDatabase (переносимое ядро, DML) + SqliteDatabase (DDL)
   Import/             чтение jsonc
   sample-data.jsonc   пример наполнения (достоверные характеристики, eandc.ru)
+
+SovietTransistorsDatabase.Tests/
+  *.cs                unit-тесты Domain (xUnit): парсер, валидаторы, каталог параметров
 ```
 
 ## Ключевые правила
