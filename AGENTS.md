@@ -52,3 +52,4 @@ SovietTransistorsDatabase.Tests/
 - `transistors.db` — в `.gitignore`, генерируется импортом; не коммитить.
 - `.kilo/skills/soviet-transistors/SKILL.md` — регламент наполнения; синхронно обновлять при изменении формата jsonc (полный справочник полей и типичных ошибок там, дублировать в AGENTS.md не нужно).
 - DML в `RelationalTransistorDatabase` — только переносимые конструкции (`@`-параметры, `COALESCE`, `LIMIT`, производные таблицы, `INSERT ... SELECT`); запись — в транзакции соединения. Диалектозависимые вещи — только в `CreateTableSql`/`OpenConnection`/`LastInsertIdSql` переопределениях.
+- Соединение БД — одно на экземпляр `RelationalTransistorDatabase`: открывается лениво при первом обращении, закрывается в `Dispose` (CLI — `using` на время команды). `EnsureCreated` выполняют только команды записи (`init`/`add`/`import`, один раз за запуск); команды чтения и `delete` обходятся без DDL.

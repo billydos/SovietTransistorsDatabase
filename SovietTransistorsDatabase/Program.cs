@@ -445,6 +445,7 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>База для команд записи (init/add/import): создаётся при необходимости, DDL выполняется один раз за запуск.</summary>
     private static ITransistorDatabase OpenDatabase(string? dbPath)
     {
         var database = new SqliteDatabase(ResolveDatabasePath(dbPath));
@@ -452,6 +453,7 @@ internal static class Program
         return database;
     }
 
+    /// <summary>База для команд чтения/delete: существующий файл, без выполнения DDL.</summary>
     private static ITransistorDatabase OpenExistingDatabase(string? dbPath)
     {
         string path = ResolveDatabasePath(dbPath);
@@ -460,7 +462,7 @@ internal static class Program
             throw new InvalidOperationException(
                 $"база данных не найдена: {Path.GetFullPath(path)} (сначала выполните init или import)");
         }
-        return OpenDatabase(path);
+        return new SqliteDatabase(path);
     }
 
     private static string ResolveDatabasePath(string? dbPath) =>

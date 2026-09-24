@@ -10,6 +10,7 @@ namespace SovietTransistorsDatabase.Data;
 /// (именованные параметры @имя, COALESCE, LIMIT, производные таблицы), совместимые с SQLite,
 /// PostgreSQL и MariaDB. Многошаговые операции записи (Save, Delete) выполняются в транзакции
 /// соединения: сбой в середине не оставляет частично применённую запись.
+/// Соединение — одно на экземпляр: открывается лениво при первом обращении и закрывается в Dispose.
 /// Для новой СУБД достаточно унаследовать класс и переопределить OpenConnection(),
 /// CreateTableSql и LastInsertIdSql.
 /// </summary>
@@ -18,13 +19,22 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     private const string TransistorColumns =
         "Id, Material, Subclass, Assembly, Feature, DevNumber, Letters, Modification, ChipVariant";
 
+    private DbConnection? _connection;
+
+    /// <summary>
+    /// Единственное соединение экземпляра: создаётся при первом обращении (диалектозависимые
+    /// настройки соединения — PRAGMA и т.п. — выполняются в OpenConnection один раз) и
+    /// переиспользуется всеми методами до Dispose.
+    /// </summary>
+    protected DbConnection Connection => _connection ??= OpenConnection();
+
     protected abstract DbConnection OpenConnection();
 
     protected abstract string CreateTableSql { get; }
 
     public void EnsureCreated()
     {
-        using DbConnection connection = OpenConnection();
+        DbConnection connection = Connection;
         using DbCommand command = connection.CreateCommand();
         command.CommandText = CreateTableSql;
         command.ExecuteNonQuery();
@@ -33,8 +43,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     public InsertOutcome Add(Transistor transistor)
     {
         ValidateTransistor(transistor);
-        using DbConnection connection = OpenConnection();
-        return InsertTransistorIfAbsent(connection, transaction: null, transistor)
+        return InsertTransistorIfAbsent(Connection, transaction: null, transistor)
             ? InsertOutcome.Added
             : InsertOutcome.DuplicateExists;
     }
@@ -44,7 +53,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         ValidateTransistor(transistor);
         ValidateDetails(transistor, details);
 
-        using DbConnection connection = OpenConnection();
+        DbConnection connection = Connection;
         using DbTransaction transaction = connection.BeginTransaction();
         int id;
         UpsertOutcome outcome;
@@ -95,19 +104,17 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public Transistor? FindEquivalent(Transistor transistor)
     {
-        using DbConnection connection = OpenConnection();
-        return FindEquivalentCore(connection, transaction: null, transistor);
+        return FindEquivalentCore(Connection, transaction: null, transistor);
     }
 
     public int? FindId(Transistor transistor)
     {
-        using DbConnection connection = OpenConnection();
-        return FindIdCore(connection, transaction: null, transistor);
+        return FindIdCore(Connection, transaction: null, transistor);
     }
 
     public bool Delete(Transistor transistor)
     {
-        using DbConnection connection = OpenConnection();
+        DbConnection connection = Connection;
         using DbTransaction transaction = connection.BeginTransaction();
         int removed;
         using (DbCommand command = connection.CreateCommand())
@@ -122,16 +129,14 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public int CountAll()
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM transistors";
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     public IReadOnlyList<Transistor> Query(TransistorQuery query)
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
 
         var sql = new StringBuilder();
         sql.Append("SELECT ").Append(TransistorColumns).Append(" FROM transistors");
@@ -204,8 +209,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public TransistorAttributes? GetAttributes(int transistorId)
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
         command.CommandText = """
             SELECT Structure, Technology, Package, PackageMaterial, ColorMarking, Pinout,
                    EsdSensitive, MilitaryGrade, RadiationHardened, Tu, Notes,
@@ -241,8 +245,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public IReadOnlyList<string> GetManufacturers(int transistorId)
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
         command.CommandText = """
             SELECT m.Name
             FROM manufacturers m
@@ -262,8 +265,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public IReadOnlyList<ElectricalParameter> GetParameters(int transistorId)
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
         command.CommandText = """
             SELECT Parameter, ValueMin, ValueMax, Uke, Ukb, Ueb, Ik, Ie, Ib, Freq, Rg, Rbe, Temp
             FROM electrical_parameters
@@ -302,8 +304,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public MaximumRatings? GetRatings(int transistorId)
     {
-        using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
+        using DbCommand command = Connection.CreateCommand();
         command.CommandText = """
             SELECT UkeMax, UkbMax, UbeMax, UkeoMax, IkMax, IbMax, PkMax,
                    IkPulseMax, PkPulseMax, PulseDuration,
@@ -338,6 +339,8 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
     public void Dispose()
     {
+        _connection?.Dispose();
+        _connection = null;
     }
 
     private static void ValidateTransistor(Transistor transistor)
