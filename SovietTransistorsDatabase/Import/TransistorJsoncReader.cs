@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.Json;
 using SovietTransistorsDatabase.Domain;
 
@@ -44,11 +45,23 @@ public static class TransistorJsoncReader
 
     private static readonly string[] DetailFields = { "attributes", "parameters", "ratings" };
 
+    private static readonly string[] NameFormFields = new[] { "name" }.Concat(DetailFields).ToArray();
+
+    private static readonly string[] DesignationFormFields = DesignationFields.Concat(DetailFields).ToArray();
+
+    private static readonly FrozenSet<string> NameFormKeys = NameFormFields.ToFrozenSet(StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string> DesignationFormKeys = DesignationFormFields.ToFrozenSet(StringComparer.Ordinal);
+
+    private static readonly FrozenSet<string> DesignationKeys = DesignationFields.ToFrozenSet(StringComparer.Ordinal);
+
     private static readonly string[] ParameterFields =
         new[] { "parameter", "min", "max" }
             .Concat(ConditionKeys.All.Select(ConditionKeys.JsoncKey))
             .Append("temp")
             .ToArray();
+
+    private static readonly FrozenSet<string> ParameterKeys = ParameterFields.ToFrozenSet(StringComparer.Ordinal);
 
     private static readonly string[] RatingFields =
     {
@@ -56,12 +69,16 @@ public static class TransistorJsoncReader
         "IkPulseMax", "PkPulseMax", "pulseDuration", "tempMin", "tempMax", "tempJunctionMax", "Rth",
     };
 
+    private static readonly FrozenSet<string> RatingKeys = RatingFields.ToFrozenSet(StringComparer.Ordinal);
+
     private static readonly string[] ExtraFields =
     {
         "structure", "technology", "package", "packageMaterial", "colorMarking", "pinout",
         "esdSensitive", "militaryGrade", "radiationHardened", "tu", "notes",
         "yearFrom", "yearTo", "massMax", "datasheetUrl",
     };
+
+    private static readonly FrozenSet<string> ExtraKeys = ExtraFields.ToFrozenSet(StringComparer.Ordinal);
 
     public static JsoncParseResult ParseFile(string path)
     {
@@ -132,16 +149,18 @@ public static class TransistorJsoncReader
             return;
         }
 
-        Transistor? transistor;
-        if (entry.TryGetProperty("name", out JsonElement nameProperty))
+        bool hasName = entry.TryGetProperty("name", out JsonElement nameProperty);
+
+        List<string> keyProblems = CheckEntryKeys(entry, hasName);
+        if (keyProblems.Count > 0)
         {
-            string[] extra = entry.EnumerateObject().Select(p => p.Name)
-                .Where(n => n != "name" && !DetailFields.Contains(n)).ToArray();
-            if (extra.Length > 0)
-            {
-                result.Issues.Add(new JsoncIssue(index, $"при использовании \"name\" допустимы только {string.Join(", ", DetailFields)}, получено: {string.Join(", ", extra)}", null));
-                return;
-            }
+            result.Issues.Add(new JsoncIssue(index, string.Join("; ", keyProblems), null));
+            return;
+        }
+
+        Transistor? transistor;
+        if (hasName)
+        {
             if (nameProperty.ValueKind != JsonValueKind.String)
             {
                 result.Issues.Add(new JsoncIssue(index, "\"name\" должно быть строкой с обозначением транзистора", null));
@@ -192,17 +211,38 @@ public static class TransistorJsoncReader
         return null;
     }
 
+    /// <summary>
+    /// Единая для обеих форм объекта-записи проверка допустимых ключей: форма "name" допускает
+    /// "name" и секции деталей, форма явных полей — поля обозначения и секции деталей.
+    /// Поле обозначения рядом с "name" — смешение форм, а не неизвестное поле.
+    /// </summary>
+    private static List<string> CheckEntryKeys(JsonElement entry, bool hasName)
+    {
+        string[] allowed = hasName ? NameFormFields : DesignationFormFields;
+        FrozenSet<string> allowedKeys = hasName ? NameFormKeys : DesignationFormKeys;
+        var problems = new List<string>();
+        foreach (JsonProperty property in entry.EnumerateObject())
+        {
+            if (allowedKeys.Contains(property.Name))
+            {
+                continue;
+            }
+            if (hasName && DesignationKeys.Contains(property.Name))
+            {
+                problems.Add($"нельзя смешивать \"name\" и явные поля обозначения: «{property.Name}» задано вместе с \"name\" — обозначение задаётся либо строкой \"name\", либо полями ({string.Join(", ", DesignationFields)})");
+            }
+            else
+            {
+                problems.Add($"неизвестное поле «{property.Name}» (допустимы: {string.Join(", ", allowed)})");
+            }
+        }
+        return problems;
+    }
+
     private static Transistor? ReadDesignationFields(JsonElement entry, int index, JsoncParseResult result)
     {
         var problems = new List<string>();
 
-        foreach (JsonProperty property in entry.EnumerateObject())
-        {
-            if (!DesignationFields.Contains(property.Name) && !DetailFields.Contains(property.Name))
-            {
-                problems.Add($"неизвестное поле «{property.Name}» (допустимы: {string.Join(", ", DesignationFields.Concat(DetailFields))})");
-            }
-        }
         foreach (string required in RequiredDesignationFields)
         {
             if (!entry.TryGetProperty(required, out _))
@@ -249,7 +289,7 @@ public static class TransistorJsoncReader
         var problems = new List<string>();
         foreach (JsonProperty property in element.EnumerateObject())
         {
-            if (!ExtraFields.Contains(property.Name) && property.Name != "manufacturers")
+            if (!ExtraKeys.Contains(property.Name) && property.Name != "manufacturers")
             {
                 problems.Add($"неизвестное поле «{property.Name}» (допустимы: {string.Join(", ", ExtraFields)}, manufacturers)");
             }
@@ -351,7 +391,7 @@ public static class TransistorJsoncReader
         var problems = new List<string>();
         foreach (JsonProperty property in item.EnumerateObject())
         {
-            if (!ParameterFields.Contains(property.Name))
+            if (!ParameterKeys.Contains(property.Name))
             {
                 problems.Add($"неизвестное поле «{property.Name}» (допустимы: {string.Join(", ", ParameterFields)})");
             }
@@ -428,7 +468,7 @@ public static class TransistorJsoncReader
         var problems = new List<string>();
         foreach (JsonProperty property in element.EnumerateObject())
         {
-            if (!RatingFields.Contains(property.Name))
+            if (!RatingKeys.Contains(property.Name))
             {
                 problems.Add($"неизвестное поле «{property.Name}» (допустимы: {string.Join(", ", RatingFields)})");
             }
