@@ -6,9 +6,12 @@ using SovietTransistorsDatabase.Domain;
 namespace SovietTransistorsDatabase.Data;
 
 /// <summary>
-/// Переносимая реляционная реализация: DML использует только стандартные конструкции
-/// (именованные параметры @имя, COALESCE, LIMIT), совместимые с SQLite, PostgreSQL и MariaDB.
-/// Для новой СУБД достаточно унаследовать класс и переопределить OpenConnection() и CreateTableSql.
+/// Переносимая реляционная реализация: DML использует только переносимые конструкции
+/// (именованные параметры @имя, COALESCE, LIMIT, производные таблицы), совместимые с SQLite,
+/// PostgreSQL и MariaDB. Многошаговые операции записи (Save, Delete) выполняются в транзакции
+/// соединения: сбой в середине не оставляет частично применённую запись.
+/// Для новой СУБД достаточно унаследовать класс и переопределить OpenConnection(),
+/// CreateTableSql и LastInsertIdSql.
 /// </summary>
 public abstract class RelationalTransistorDatabase : ITransistorDatabase
 {
@@ -31,12 +34,9 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     {
         ValidateTransistor(transistor);
         using DbConnection connection = OpenConnection();
-        if (FindIdCore(connection, transistor) is not null)
-        {
-            return InsertOutcome.DuplicateExists;
-        }
-        InsertTransistorCore(connection, transistor);
-        return InsertOutcome.Added;
+        return InsertTransistorIfAbsent(connection, transaction: null, transistor)
+            ? InsertOutcome.Added
+            : InsertOutcome.DuplicateExists;
     }
 
     public UpsertOutcome Save(Transistor transistor, TransistorDetails? details)
@@ -45,70 +45,79 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         ValidateDetails(transistor, details);
 
         using DbConnection connection = OpenConnection();
-        int? id = FindIdCore(connection, transistor);
+        using DbTransaction transaction = connection.BeginTransaction();
+        int id;
         UpsertOutcome outcome;
-        if (id is null)
+        if (InsertTransistorIfAbsent(connection, transaction, transistor))
         {
-            InsertTransistorCore(connection, transistor);
-            id = FindIdCore(connection, transistor)
-                ?? throw new InvalidOperationException($"не удалось определить id записи «{transistor.Name}»");
+            id = GetLastInsertId(connection, transaction);
             outcome = UpsertOutcome.Added;
         }
         else
         {
+            id = FindIdCore(connection, transaction, transistor)
+                ?? throw new InvalidOperationException($"не удалось определить id записи «{transistor.Name}»");
             outcome = UpsertOutcome.UpdatedExisting;
         }
 
-        if (details is null)
+        if (details is not null)
         {
-            return outcome;
-        }
-        if (details.Attributes is { } attributes)
-        {
-            if (HasAnyAttributeField(attributes))
+            if (details.Attributes is { } attributes)
             {
-                SetAttributesCore(connection, id.Value, attributes);
+                if (HasAnyAttributeField(attributes))
+                {
+                    SetAttributesCore(connection, transaction, id, attributes);
+                }
+                else if (details.Manufacturers is null)
+                {
+                    // секция задана пустой (без manufacturers) — очистить атрибуты;
+                    // если задан только manufacturers — атрибуты не трогаем
+                    ClearAttributesCore(connection, transaction, id);
+                }
             }
-            else if (details.Manufacturers is null)
+            if (details.Manufacturers is { } manufacturers)
             {
-                // секция задана пустой (без manufacturers) — очистить атрибуты;
-                // если задан только manufacturers — атрибуты не трогаем
-                ClearAttributesCore(connection, id.Value);
+                SetManufacturersCore(connection, transaction, id, manufacturers);
+            }
+            if (details.Parameters is { } parameters)
+            {
+                ReplaceParametersCore(connection, transaction, id, parameters);
+            }
+            if (details.Ratings is { } ratings)
+            {
+                SetRatingsCore(connection, transaction, id, ratings);
             }
         }
-        if (details.Manufacturers is { } manufacturers)
-        {
-            SetManufacturersCore(connection, id.Value, manufacturers);
-        }
-        if (details.Parameters is { } parameters)
-        {
-            ReplaceParametersCore(connection, id.Value, parameters);
-        }
-        if (details.Ratings is { } ratings)
-        {
-            SetRatingsCore(connection, id.Value, ratings);
-        }
+
+        transaction.Commit();
         return outcome;
     }
 
     public Transistor? FindEquivalent(Transistor transistor)
     {
         using DbConnection connection = OpenConnection();
-        return FindEquivalentCore(connection, transistor);
+        return FindEquivalentCore(connection, transaction: null, transistor);
     }
 
     public int? FindId(Transistor transistor)
     {
         using DbConnection connection = OpenConnection();
-        return FindIdCore(connection, transistor);
+        return FindIdCore(connection, transaction: null, transistor);
     }
 
     public bool Delete(Transistor transistor)
     {
         using DbConnection connection = OpenConnection();
-        using DbCommand command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM transistors WHERE " + BuildEquivalence(command, transistor);
-        return command.ExecuteNonQuery() > 0;
+        using DbTransaction transaction = connection.BeginTransaction();
+        int removed;
+        using (DbCommand command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "DELETE FROM transistors WHERE " + BuildEquivalence(command, transistor);
+            removed = command.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return removed > 0;
     }
 
     public int CountAll()
@@ -383,31 +392,43 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         }
     }
 
-    private int? FindIdCore(DbConnection connection, Transistor transistor)
+    private int? FindIdCore(DbConnection connection, DbTransaction? transaction, Transistor transistor)
     {
         using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "SELECT Id FROM transistors WHERE " + BuildEquivalence(command, transistor) + " LIMIT 1";
         object? result = command.ExecuteScalar();
         return result is null || result is DBNull ? null : Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
-    private Transistor? FindEquivalentCore(DbConnection connection, Transistor transistor)
+    private Transistor? FindEquivalentCore(DbConnection connection, DbTransaction? transaction, Transistor transistor)
     {
         using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "SELECT " + TransistorColumns + " FROM transistors WHERE " + BuildEquivalence(command, transistor) + " LIMIT 1";
         using DbDataReader reader = command.ExecuteReader();
         return reader.Read() ? ReadTransistor(reader) : null;
     }
 
-    private static void InsertTransistorCore(DbConnection connection, Transistor transistor)
+    /// <summary>
+    /// Вставка «если нет эквивалентной записи»: одна команда вместо «найти, затем вставить» —
+    /// без гонки на дубликат и без лишнего SELECT. Эквивалентность учитывает пары материалов
+    /// (Г/1, К/2, А/3, И/4), то есть строже UNIQUE-ограничения uq_transistor.
+    /// Возвращает false, если эквивалентная запись уже существует (ничего не вставлено).
+    /// </summary>
+    private static bool InsertTransistorIfAbsent(DbConnection connection, DbTransaction? transaction, Transistor transistor)
     {
         using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        // однострочная производная таблица вместо SELECT без FROM:
+        // MariaDB требует FROM при использовании WHERE
         command.CommandText = """
             INSERT INTO transistors
                 (Material, Subclass, Assembly, Feature, DevNumber, Letters, Modification, ChipVariant)
-            VALUES
-                (@material, @subclass, @assembly, @feature, @dev_number, @letters, @modification, @chip_variant)
-            """;
+            SELECT @material, @subclass, @assembly, @feature, @dev_number, @letters, @modification, @chip_variant
+            FROM (SELECT 1) AS src
+            WHERE NOT EXISTS (SELECT 1 FROM transistors WHERE
+            """ + " " + BuildEquivalence(command, transistor) + ")";
         AddParameter(command, "@material", transistor.Material.ToString());
         AddParameter(command, "@subclass", transistor.Subclass.ToString());
         AddParameter(command, "@assembly", transistor.IsAssembly ? "С" : DBNull.Value);
@@ -416,8 +437,27 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         AddParameter(command, "@letters", transistor.Letters);
         AddParameter(command, "@modification", transistor.Modification is int m ? m : DBNull.Value);
         AddParameter(command, "@chip_variant", transistor.ChipVariant is int c ? c : DBNull.Value);
-        command.ExecuteNonQuery();
+        return command.ExecuteNonQuery() > 0;
     }
+
+    /// <summary>Возвращает id строки, вставленной в этом соединении последней (сразу после INSERT).</summary>
+    private int GetLastInsertId(DbConnection connection, DbTransaction transaction)
+    {
+        using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = LastInsertIdSql;
+        object? result = command.ExecuteScalar();
+        return result is null || result is DBNull
+            ? throw new InvalidOperationException("не удалось получить id вставленной записи")
+            : Convert.ToInt32(result, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// SQL-запрос, возвращающий id последней вставленной в текущем соединении строки.
+    /// Единственный диалектозависимый элемент DML (SQLite — last_insert_rowid(),
+    /// PostgreSQL — lastval(), MariaDB — LAST_INSERT_ID()), переопределяется вместе с OpenConnection().
+    /// </summary>
+    protected abstract string LastInsertIdSql { get; }
 
     private static bool HasAnyAttributeField(TransistorAttributes a) =>
         a.Structure is not null || a.Technology is not null || a.Package is not null
@@ -426,15 +466,16 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         || a.Tu is not null || a.Notes is not null || a.YearFrom is not null || a.YearTo is not null
         || a.MassMax is not null || a.DatasheetUrl is not null;
 
-    private static void ClearAttributesCore(DbConnection connection, int transistorId)
+    private static void ClearAttributesCore(DbConnection connection, DbTransaction transaction, int transistorId)
     {
         using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "DELETE FROM transistor_attributes WHERE TransistorId = @id";
         AddParameter(command, "@id", transistorId);
         command.ExecuteNonQuery();
     }
 
-    private static void SetAttributesCore(DbConnection connection, int transistorId, TransistorAttributes attributes)
+    private static void SetAttributesCore(DbConnection connection, DbTransaction transaction, int transistorId, TransistorAttributes attributes)
     {
         void AddValues(DbCommand command)
         {
@@ -457,6 +498,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
         using (DbCommand update = connection.CreateCommand())
         {
+            update.Transaction = transaction;
             update.CommandText = """
                 UPDATE transistor_attributes
                 SET Structure = @structure, Technology = @technology, Package = @package,
@@ -471,6 +513,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             if (update.ExecuteNonQuery() > 0) return;
         }
         using DbCommand insert = connection.CreateCommand();
+        insert.Transaction = transaction;
         insert.CommandText = """
             INSERT INTO transistor_attributes
                 (TransistorId, Structure, Technology, Package, PackageMaterial, ColorMarking, Pinout,
@@ -485,10 +528,11 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         insert.ExecuteNonQuery();
     }
 
-    private static void SetManufacturersCore(DbConnection connection, int transistorId, IReadOnlyList<string> manufacturers)
+    private static void SetManufacturersCore(DbConnection connection, DbTransaction transaction, int transistorId, IReadOnlyList<string> manufacturers)
     {
         using (DbCommand delete = connection.CreateCommand())
         {
+            delete.Transaction = transaction;
             delete.CommandText = "DELETE FROM transistor_manufacturers WHERE TransistorId = @id";
             AddParameter(delete, "@id", transistorId);
             delete.ExecuteNonQuery();
@@ -504,37 +548,38 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
                 names.Add(name);
             }
         }
+        if (names.Count == 0) return;
+
+        // два подготовленных один раз запроса на каждое имя вместо трёх:
+        // «создать имя, если его нет» + «связать с транзистором»
+        using DbCommand ensureManufacturer = connection.CreateCommand();
+        ensureManufacturer.Transaction = transaction;
+        ensureManufacturer.CommandText = """
+            INSERT INTO manufacturers (Name)
+            SELECT @name FROM (SELECT 1) AS src
+            WHERE NOT EXISTS (SELECT 1 FROM manufacturers WHERE Name = @name)
+            """;
+        DbParameter ensureName = AddParameter(ensureManufacturer, "@name", "");
+
+        using DbCommand link = connection.CreateCommand();
+        link.Transaction = transaction;
+        link.CommandText = """
+            INSERT INTO transistor_manufacturers (TransistorId, ManufacturerId)
+            SELECT @id, Id FROM manufacturers WHERE Name = @name
+            """;
+        AddParameter(link, "@id", transistorId);
+        DbParameter linkName = AddParameter(link, "@name", "");
+
         foreach (string name in names)
         {
-            using (DbCommand find = connection.CreateCommand())
-            {
-                find.CommandText = "SELECT Id FROM manufacturers WHERE Name = @name";
-                AddParameter(find, "@name", name);
-                object? found = find.ExecuteScalar();
-                if (found is not null && found is not DBNull)
-                {
-                    continue;
-                }
-            }
-            using DbCommand create = connection.CreateCommand();
-            create.CommandText = "INSERT INTO manufacturers (Name) VALUES (@name)";
-            AddParameter(create, "@name", name);
-            create.ExecuteNonQuery();
-        }
-        foreach (string name in names)
-        {
-            using DbCommand link = connection.CreateCommand();
-            link.CommandText = """
-                INSERT INTO transistor_manufacturers (TransistorId, ManufacturerId)
-                SELECT @id, Id FROM manufacturers WHERE Name = @name
-                """;
-            AddParameter(link, "@id", transistorId);
-            AddParameter(link, "@name", name);
+            ensureName.Value = name;
+            ensureManufacturer.ExecuteNonQuery();
+            linkName.Value = name;
             link.ExecuteNonQuery();
         }
     }
 
-    private static void SetRatingsCore(DbConnection connection, int transistorId, MaximumRatings ratings)
+    private static void SetRatingsCore(DbConnection connection, DbTransaction transaction, int transistorId, MaximumRatings ratings)
     {
         void AddValues(DbCommand command)
         {
@@ -556,6 +601,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
         using (DbCommand update = connection.CreateCommand())
         {
+            update.Transaction = transaction;
             update.CommandText = """
                 UPDATE maximum_ratings
                 SET UkeMax = @uKe, UkbMax = @uKb, UbeMax = @uBe, UkeoMax = @uKeo,
@@ -569,6 +615,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             if (update.ExecuteNonQuery() > 0) return;
         }
         using DbCommand insert = connection.CreateCommand();
+        insert.Transaction = transaction;
         insert.CommandText = """
             INSERT INTO maximum_ratings
                 (TransistorId, UkeMax, UkbMax, UbeMax, UkeoMax, IkMax, IbMax, PkMax,
@@ -581,38 +628,56 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         insert.ExecuteNonQuery();
     }
 
-    private static void ReplaceParametersCore(DbConnection connection, int transistorId, IReadOnlyList<ElectricalParameter> parameters)
+    private static void ReplaceParametersCore(DbConnection connection, DbTransaction transaction, int transistorId, IReadOnlyList<ElectricalParameter> parameters)
     {
         using (DbCommand delete = connection.CreateCommand())
         {
+            delete.Transaction = transaction;
             delete.CommandText = "DELETE FROM electrical_parameters WHERE TransistorId = @id";
             AddParameter(delete, "@id", transistorId);
             delete.ExecuteNonQuery();
         }
+        if (parameters.Count == 0) return;
+
+        // команда готовится один раз и переиспользуется для всех строк
+        using DbCommand insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = """
+            INSERT INTO electrical_parameters
+                (TransistorId, Parameter, ValueMin, ValueMax, Uke, Ukb, Ueb, Ik, Ie, Ib, Freq, Rg, Rbe, Temp)
+            VALUES
+                (@id, @parameter, @valueMin, @valueMax, @uKe, @uKb, @uEb, @iK, @iE, @iB, @freq, @rg, @rbe, @temp)
+            """;
+        AddParameter(insert, "@id", transistorId);
+        DbParameter pParameter = AddParameter(insert, "@parameter", "");
+        DbParameter pValueMin = AddParameter(insert, "@valueMin", DBNull.Value);
+        DbParameter pValueMax = AddParameter(insert, "@valueMax", DBNull.Value);
+        DbParameter pUke = AddParameter(insert, "@uKe", DBNull.Value);
+        DbParameter pUkb = AddParameter(insert, "@uKb", DBNull.Value);
+        DbParameter pUeb = AddParameter(insert, "@uEb", DBNull.Value);
+        DbParameter pIk = AddParameter(insert, "@iK", DBNull.Value);
+        DbParameter pIe = AddParameter(insert, "@iE", DBNull.Value);
+        DbParameter pIb = AddParameter(insert, "@iB", DBNull.Value);
+        DbParameter pFreq = AddParameter(insert, "@freq", DBNull.Value);
+        DbParameter pRg = AddParameter(insert, "@rg", DBNull.Value);
+        DbParameter pRbe = AddParameter(insert, "@rbe", DBNull.Value);
+        DbParameter pTemp = AddParameter(insert, "@temp", DBNull.Value);
         foreach (ElectricalParameter parameter in parameters)
         {
-            using DbCommand command = connection.CreateCommand();
-            command.CommandText = """
-                INSERT INTO electrical_parameters
-                    (TransistorId, Parameter, ValueMin, ValueMax, Uke, Ukb, Ueb, Ik, Ie, Ib, Freq, Rg, Rbe, Temp)
-                VALUES
-                    (@id, @parameter, @valueMin, @valueMax, @uKe, @uKb, @uEb, @iK, @iE, @iB, @freq, @rg, @rbe, @temp)
-                """;
-            AddParameter(command, "@id", transistorId);
-            AddParameter(command, "@parameter", ElectricalParameterCatalog.Info(parameter.Kind).Code);
-            AddParameter(command, "@valueMin", Box(parameter.ValueMin));
-            AddParameter(command, "@valueMax", Box(parameter.ValueMax));
-            AddParameter(command, "@uKe", Box(parameter.Uke));
-            AddParameter(command, "@uKb", Box(parameter.Ukb));
-            AddParameter(command, "@uEb", Box(parameter.Ueb));
-            AddParameter(command, "@iK", Box(parameter.Ik));
-            AddParameter(command, "@iE", Box(parameter.Ie));
-            AddParameter(command, "@iB", Box(parameter.Ib));
-            AddParameter(command, "@freq", Box(parameter.Freq));
-            AddParameter(command, "@rg", Box(parameter.Rg));
-            AddParameter(command, "@rbe", Box(parameter.Rbe));
-            AddParameter(command, "@temp", Box(parameter.Temp));
-            command.ExecuteNonQuery();
+            pParameter.Value = ElectricalParameterCatalog.Info(parameter.Kind).Code;
+            pValueMin.Value = Box(parameter.ValueMin);
+            pValueMax.Value = Box(parameter.ValueMax);
+            pUke.Value = Box(parameter.Uke);
+            pUkb.Value = Box(parameter.Ukb);
+            pUeb.Value = Box(parameter.Ueb);
+            pIk.Value = Box(parameter.Ik);
+            pIe.Value = Box(parameter.Ie);
+            pIb.Value = Box(parameter.Ib);
+            pFreq.Value = Box(parameter.Freq);
+            pRg.Value = Box(parameter.Rg);
+            pRbe.Value = Box(parameter.Rbe);
+            pTemp.Value = Box(parameter.Temp);
+            insert.ExecuteNonQuery();
         }
     }
 
@@ -663,11 +728,12 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             """;
     }
 
-    private static void AddParameter(DbCommand command, string name, object value)
+    private static DbParameter AddParameter(DbCommand command, string name, object value)
     {
         DbParameter parameter = command.CreateParameter();
         parameter.ParameterName = name;
         parameter.Value = value;
         command.Parameters.Add(parameter);
+        return parameter;
     }
 }
