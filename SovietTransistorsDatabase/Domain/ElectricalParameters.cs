@@ -119,10 +119,12 @@ public static class ElectricalParameterValidator
         if (parameter.ValueMin is double min && min <= 0) errors.Add($"«{info.Code}»: значение должно быть положительным");
         if (parameter.ValueMax is double max && max <= 0) errors.Add($"«{info.Code}»: значение должно быть положительным");
         if (parameter.ValueMin is double a && parameter.ValueMax is double b && a > b) errors.Add($"«{info.Code}»: нижняя граница больше верхней");
-        if (info.ValueCeiling is double ceiling && parameter.ValueMin is double value && value > ceiling)
+        if (info.ValueCeiling is double ceiling)
         {
             string unit = info.Unit is null ? "" : " " + info.Unit;
-            errors.Add($"«{info.Code}»: {info.DisplayName} не может превышать {ParameterText.Fmt(ceiling)}{unit}");
+            string limit = $"«{info.Code}»: {info.DisplayName} не может превышать {ParameterText.Fmt(ceiling)}{unit}";
+            if (parameter.ValueMin is double minCeiling && minCeiling > ceiling) errors.Add(limit);
+            if (parameter.ValueMax is double maxCeiling && maxCeiling > ceiling) errors.Add(limit);
         }
 
         if (!info.Conditions.IsSatisfiedBy(parameter))

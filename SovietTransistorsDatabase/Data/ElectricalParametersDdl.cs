@@ -43,11 +43,16 @@ public static class ElectricalParametersDdl
                 _ => throw new InvalidOperationException($"неизвестное правило границ: {info.Direction}"),
             };
             if (info.ValueCeiling is double ceiling)
-                bounds += $" AND ValueMin <= {ceiling.ToString(CultureInfo.InvariantCulture)}";
+            {
+                string limit = ceiling.ToString(CultureInfo.InvariantCulture);
+                bounds += $" AND (ValueMin IS NULL OR ValueMin <= {limit}) AND (ValueMax IS NULL OR ValueMax <= {limit})";
+            }
             sql.AppendLine($"            WHEN '{info.Code}' THEN CASE WHEN {bounds} THEN 1 ELSE 0 END");
         }
         sql.AppendLine("            ELSE 0");
         sql.AppendLine("        END = 1");
+        sql.AppendLine("        AND (ValueMin IS NULL OR ValueMin > 0)");
+        sql.AppendLine("        AND (ValueMax IS NULL OR ValueMax > 0)");
         sql.AppendLine("    ),");
     }
 
@@ -72,6 +77,9 @@ public static class ElectricalParametersDdl
         }
         sql.AppendLine("            ELSE 0");
         sql.AppendLine("        END = 1");
+        // позитивность условий (кроме Temp — температура может быть отрицательной), как в Domain-валидаторе
+        foreach (ConditionKey key in ConditionKeys.All)
+            sql.AppendLine($"        AND ({ConditionKeys.Name(key)} IS NULL OR {ConditionKeys.Name(key)} > 0)");
         sql.AppendLine("    )");
     }
 
