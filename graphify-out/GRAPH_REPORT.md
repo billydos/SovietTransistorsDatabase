@@ -1,127 +1,147 @@
-# Graph Report - SovietTransistorsDatabase  (2026-09-23)
+# Graph Report - SovietTransistorsDatabase  (2026-09-25)
 
 ## Corpus Check
-- Corpus is ~16,327 words - fits in a single context window. You may not need a graph.
+- Corpus is ~26,618 words - fits in a single context window. You may not need a graph.
 
 ## Summary
-- 347 nodes · 740 edges · 12 communities
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 39 edges (avg confidence: 0.86)
-- Token cost: 4,600 input · 9,800 output
+- 576 nodes · 1231 edges · 19 communities (15 shown, 4 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 79 edges (avg confidence: 0.85)
+- Token cost: 27,000 input · 9,500 output
 
 ## Community Hubs (Navigation)
-- Relational Database Core
-- Electrical Parameter Catalog
-- JSONC Import Reader
-- CLI Commands & Entry Point
-- Transistor Attributes & Validation
-- Project Docs & Conventions
-- Namespaces & Designation Model
+- Parameter Catalog
+- Relational DML Core
+- DDL & Validation
+- Database Interface & SQLite
+- Project Rules & Docs
+- jsonc Import
+- Project Structure
+- Designation Alphabet & Materials
+- Descriptive Attributes
+- Maximum Ratings & Details
 - Parameter Values & Conditions
-- Maximum Ratings
-- Semiconductor Materials
-- GOST Name Parsing
-- Project Configuration
+- Designation Parser & Tests
+- Record Validator & Tests
+- Build & Packages
+- Sample Data & Storage
+- Canonical Units
+- CLI Commands
+- DB Value Encoding
+- Field Naming
 
 ## God Nodes (most connected - your core abstractions)
-1. `RelationalTransistorDatabase` - 36 edges
-2. `Transistor` - 33 edges
-3. `ParameterKind` - 27 edges
-4. `ElectricalParameter` - 26 edges
-5. `TransistorAttributes` - 24 edges
-6. `Program` - 23 edges
-7. `MaximumRatings` - 22 edges
-8. `TransistorJsoncReader` - 21 edges
-9. `AGENTS.md (правила проекта SovietTransistorsDatabase)` - 20 edges
-10. `ITransistorDatabase` - 16 edges
+1. `RelationalTransistorDatabase` - 39 edges
+2. `ElectricalParameter` - 38 edges
+3. `ParameterKind` - 34 edges
+4. `TransistorAttributes` - 34 edges
+5. `Transistor` - 33 edges
+6. `MaximumRatings` - 28 edges
+7. `Program` - 27 edges
+8. `ConditionKey` - 26 edges
+9. `ElectricalParameterValidatorTests` - 24 edges
+10. `SovietTransistorsDatabase.Domain` - 23 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Семантика секций jsonc: отсутствует — не менять, задана — заменить целиком, ошибка — секция игнорируется (защита от частичного стирания, идемпотентность)` --semantically_similar_to--> `Дублирование валидации: Domain/*Validator (сообщения по-русски) + CHECK-ограничения в Data/SqliteDatabase.cs`  [INFERRED] [semantically similar]
-  .kilo/skills/soviet-transistors/SKILL.md → AGENTS.md
-- `Формат jsonc-файла импорта (корень transistors, три формы записи)` --conceptually_related_to--> `Import/ (чтение jsonc)`  [INFERRED]
-  .kilo/skills/soviet-transistors/SKILL.md → AGENTS.md
-- `Команды CLI: init, import, add, parse, list, info, find, delete, count (+ опции --db, --dry-run)` --conceptually_related_to--> `Program.cs (CLI: разбор аргументов, вывод)`  [INFERRED]
-  .kilo/skills/soviet-transistors/SKILL.md → AGENTS.md
-- `README.md (справочник советских транзисторов)` --references--> `SQLite (UTF-8) — хранилище базы`  [EXTRACTED]
-  README.md → AGENTS.md
-- `Domain/ (обозначения, каталог параметров, ratings, атрибуты, валидация — без зависимостей от БД)` --conceptually_related_to--> `Формат обозначения транзистора (материал/подкласс/сборка/признак/номер/буквы/модификация/бескорп.)`  [INFERRED]
-  AGENTS.md → .kilo/skills/soviet-transistors/SKILL.md
+- `Формат jsonc (README)` --semantically_similar_to--> `jsonc-формат наполнения (корень transistors, три формы записи)`  [INFERRED] [semantically similar]
+  README.md → .kilo/skills/soviet-transistors-database/SKILL.md
+- `ГОСТ 10862-64 (система обозначений)` --semantically_similar_to--> `Формат обозначения по ГОСТ 10862-64 (материал/подкласс/сборка/признак/номер/буквы/модификация/бескорпусное)`  [INFERRED] [semantically similar]
+  README.md → .kilo/skills/soviet-transistors-database/SKILL.md
+- `Команды CLI (README)` --semantically_similar_to--> `Команды CLI (init/import/add/parse/list/info/find/delete/count)`  [INFERRED] [semantically similar]
+  README.md → .kilo/skills/soviet-transistors-database/SKILL.md
+- `Правило 6: обозначение — точный ключ записи; материалы равнозначны только физически` --semantically_similar_to--> `Равнозначность материалов Г/1, К/2, А/3, И/4 (не ключ записи)`  [INFERRED] [semantically similar]
+  AGENTS.md → .kilo/skills/soviet-transistors-database/SKILL.md
+- `Правило 3: канонические единицы, перевод до записи` --semantically_similar_to--> `Канонические единицы (В, мА, мкА, МГц, Ом, пФ, пс, нс, дБ, Вт, %, °C, мВт, мкс, г, °C/Вт)`  [INFERRED] [semantically similar]
+  AGENTS.md → .kilo/skills/soviet-transistors-database/SKILL.md
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
-- **Слоистая архитектура утилиты (Program.cs + Domain/ + Data/ + Import/)** — agents_program_cs, agents_domain_layer, agents_data_layer, agents_import_layer [EXTRACTED 1.00]
-- **Конвейер импорта jsonc (формат → Import/ → CLI import → схема БД; sample-data как источник восстановления)** — kilo_skills_soviet_transistors_skill_jsonc_format, agents_import_layer, kilo_skills_soviet_transistors_skill_cli, kilo_skills_soviet_transistors_skill_db_schema, agents_sample_data [INFERRED 0.85]
-- **Двухуровневая валидация (Domain/*Validator в приложении + CHECK/FK в БД)** — agents_validation_duplication, agents_domain_layer, agents_data_layer, kilo_skills_soviet_transistors_skill_db_schema [EXTRACTED 1.00]
+- **Single-source parameter catalog pipeline (validator, help, jsonc fields, SQL CHECK)** — agents_electricalparametercatalog, agents_conditionspecs, agents_electricalparametersddl, agents_sqlitedatabase, analysis_c6_declarative_catalog, _kilo_skills_soviet_transistors_database_skill_parameters_section [EXTRACTED 1.00]
+- **Material equivalence vs exact designation key (Г/1, К/2, А/3, И/4)** — agents_exact_designation_key, _kilo_skills_soviet_transistors_database_skill_material_equivalence, analysis_c13_material_equivalence, agents_findmaterialequivalents [EXTRACTED 1.00]
+- **Transactional write path redesign around RelationalTransistorDatabase** — analysis_c1_transactions, analysis_c2_orphan_manufacturers, analysis_c3_redundant_queries, analysis_c4_single_connection, agents_relationaltransistordatabase [INFERRED 0.85]
 
-## Communities (12 total, 0 thin omitted)
+## Communities (19 total, 4 thin omitted)
 
-### Community 0 - "Relational Database Core"
-Cohesion: 0.07
-Nodes (25): DbCommand, DbDataReader, IDisposable, IReadOnlyList, InsertOutcome, Added, DuplicateExists, ITransistorDatabase (+17 more)
+### Community 0 - "Parameter Catalog"
+Cohesion: 0.06
+Nodes (38): IReadOnlyDictionary, IReadOnlyList, BoundDirection, AtLeast, AtLeastOrRange, AtMost, ElectricalParameterCatalog, CodesList (+30 more)
 
-### Community 1 - "Electrical Parameter Catalog"
+### Community 1 - "Relational DML Core"
+Cohesion: 0.09
+Nodes (23): DbCommand, DbDataReader, DbParameter, DbTransaction, RowReader, DbConnection, Dictionary, IReadOnlyList (+15 more)
+
+### Community 2 - "DDL & Validation"
 Cohesion: 0.05
-Nodes (43): IReadOnlyCollection, IReadOnlyDictionary, BoundDirection, AtLeast, AtLeastOrRange, AtMost, ConditionRule, ExactlyOneCurrent (+35 more)
+Nodes (36): IEnumerable, IReadOnlySet, ElectricalParametersDdl, ElectricalParameterValidator, IEnumerable, IReadOnlyList, IReadOnlySet, ConditionKey (+28 more)
 
-### Community 2 - "JSONC Import Reader"
-Cohesion: 0.15
-Nodes (19): Func, JsonDocumentOptions, JsonElement, JsonValueKind, List, Transistor, JsoncIssue, JsoncParseResult (+11 more)
+### Community 3 - "Database Interface & SQLite"
+Cohesion: 0.09
+Nodes (15): Failures, IDisposable, IReadOnlyList, ITransistorDatabase, DbConnection, SqliteDatabase, CreateTableSql, LastInsertIdSql (+7 more)
 
-### Community 3 - "CLI Commands & Entry Point"
-Cohesion: 0.16
-Nodes (7): IReadOnlySet, DbConnection, SqliteDatabase, CreateTableSql, Dictionary, List, Program
+### Community 4 - "Project Rules & Docs"
+Cohesion: 0.06
+Nodes (47): Секция jsonc attributes (описательные атрибуты 1:1), Формат обозначения по ГОСТ 10862-64 (материал/подкласс/сборка/признак/номер/буквы/модификация/бескорпусное), SKILL.md — регламент наполнения soviet-transistors-database, Равнозначность материалов Г/1, К/2, А/3, И/4 (не ключ записи), Секция jsonc parameters (20 кодов электрических параметров с условиями), Секция jsonc ratings (предельные эксплуатационные данные), Характерные сообщения валидации (позиция N, «условия — …; задано: …», границы, positivity), AttributesDdl (генерируемый chk_any_attribute) (+39 more)
 
-### Community 4 - "Transistor Attributes & Validation"
-Cohesion: 0.08
-Nodes (24): TransistorDetails, Attributes, Manufacturers, Parameters, Ratings, IReadOnlyList, List, TransistorAttributes (+16 more)
+### Community 5 - "jsonc Import"
+Cohesion: 0.13
+Nodes (21): FrozenSet, Func, JsonDocumentOptions, JsonElement, JsonValueKind, List, Transistor, JsoncIssue (+13 more)
 
-### Community 5 - "Project Docs & Conventions"
-Cohesion: 0.19
-Nodes (28): AGENTS.md (правила проекта SovietTransistorsDatabase), Data/ (RelationalTransistorDatabase — переносимое ядро DML + SqliteDatabase — DDL), Переносимость схемы на PostgreSQL/MariaDB (только переносимые DML: @-параметры, COALESCE, LIMIT; диалекты — в CreateTableSql/OpenConnection), Domain/ (обозначения, каталог параметров, ratings, атрибуты, валидация — без зависимостей от БД), eandc.ru (источник достоверных справочных характеристик), ГОСТ 10862-64 (система обозначений транзисторов), Import/ (чтение jsonc), Единое CamelCase-именование полей в jsonc, C#-свойствах и колонках БД (Uke, Ik, h21e, colorMarking; исключения freq/temp) (+20 more)
+### Community 6 - "Project Structure"
+Cohesion: 0.07
+Nodes (24): SovietTransistorsDatabase.Import, SovietTransistorsDatabase, SovietTransistorsDatabase.Tests, SovietTransistorsDatabase.Data, SovietTransistorsDatabase.Domain, microsoft_data_sqlite, AttributesDdl, TransistorQuery (+16 more)
 
-### Community 6 - "Namespaces & Designation Model"
-Cohesion: 0.11
-Nodes (18): SovietTransistorsDatabase.Import, SovietTransistorsDatabase, SovietTransistorsDatabase.Data, SovietTransistorsDatabase.Domain, microsoft_data_sqlite, TransistorQuery, ChipVariant, DevelopmentNumber (+10 more)
-
-### Community 7 - "Parameter Values & Conditions"
-Cohesion: 0.11
-Nodes (17): IReadOnlyList, ElectricalParameter, Freq, Ib, Ie, Ik, Kind, Rbe (+9 more)
-
-### Community 8 - "Maximum Ratings"
+### Community 7 - "Designation Alphabet & Materials"
 Cohesion: 0.10
-Nodes (18): IReadOnlyList, List, MaximumRatings, IbMax, IkMax, IkPulseMax, PkMax, PkPulseMax (+10 more)
+Nodes (20): ArgumentException, Digit, Letter, Cyrillic, Dictionary, IReadOnlyDictionary, Materials, SemiconductorMaterial (+12 more)
 
-### Community 9 - "Semiconductor Materials"
-Cohesion: 0.16
-Nodes (12): Digit, Letter, Dictionary, IReadOnlyDictionary, Materials, SemiconductorMaterial, GalliumArsenide, Germanium (+4 more)
+### Community 8 - "Descriptive Attributes"
+Cohesion: 0.09
+Nodes (25): PropertyInfo, IReadOnlyList, List, TransistorAttributes, ColorMarking, DatasheetUrl, EsdSensitive, MassMax (+17 more)
 
-### Community 10 - "GOST Name Parsing"
-Cohesion: 0.16
-Nodes (4): Cyrillic, TransistorNameParser, IReadOnlyList, TransistorValidator
+### Community 9 - "Maximum Ratings & Details"
+Cohesion: 0.09
+Nodes (25): TransistorDetails, Attributes, Manufacturers, Parameters, Ratings, IReadOnlyList, List, MaximumRatings (+17 more)
 
-### Community 11 - "Project Configuration"
-Cohesion: 0.50
-Nodes (3): net10.0, Microsoft.Data.Sqlite (10.0.12), Microsoft.NET.Sdk
+### Community 10 - "Parameter Values & Conditions"
+Cohesion: 0.12
+Nodes (19): ElectricalParameter, Freq, Ib, Ie, Ik, Kind, Rbe, Rg (+11 more)
+
+### Community 11 - "Designation Parser & Tests"
+Cohesion: 0.15
+Nodes (10): FormatException, TransistorNameParser, Fact, InlineData, MemberData, Theory, TheoryData, TransistorNameParserTests (+2 more)
+
+### Community 12 - "Record Validator & Tests"
+Cohesion: 0.31
+Nodes (6): IReadOnlyList, TransistorValidator, Fact, InlineData, Theory, TransistorValidatorTests
+
+### Community 13 - "Build & Packages"
+Cohesion: 0.18
+Nodes (9): coverlet.collector (6.0.4), Microsoft.Data.Sqlite (10.0.12), Microsoft.NET.Test.Sdk (17.14.1), xunit (2.9.3), xunit.runner.visualstudio (3.1.4), net10.0, Microsoft.NET.Sdk, net10.0 (+1 more)
+
+### Community 14 - "Sample Data & Storage"
+Cohesion: 0.33
+Nodes (6): jsonc-формат наполнения (корень transistors, три формы записи), Правило 5: миграции БД не поддерживаются намеренно, база пересоздаётся импортом, sample-data.jsonc (пример наполнения, eandc.ru), transistors.db (рабочая база, генерируется импортом), Формат jsonc (README), sample-data.jsonc (README)
 
 ## Knowledge Gaps
-- **122 isolated node(s):** `Added`, `DuplicateExists`, `Added`, `UpdatedExisting`, `Attributes` (+117 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 143 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **162 isolated node(s):** `KindVariantPairs`, `EquivalentSymbols`, `net10.0`, `coverlet.collector (6.0.4)`, `Microsoft.NET.Test.Sdk (17.14.1)` (+157 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 212 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `ElectricalParameter` connect `Parameter Values & Conditions` to `Relational Database Core`, `Electrical Parameter Catalog`, `JSONC Import Reader`, `Transistor Attributes & Validation`?**
+- **Why does `SovietTransistorsDatabase.Domain` connect `Project Structure` to `Parameter Catalog`, `DDL & Validation`, `jsonc Import`, `Designation Alphabet & Materials`, `Descriptive Attributes`, `Maximum Ratings & Details`, `Designation Parser & Tests`, `Record Validator & Tests`?**
   _High betweenness centrality (0.161) - this node is a cross-community bridge._
-- **Why does `ParameterKind` connect `Electrical Parameter Catalog` to `Transistor Attributes & Validation`, `Parameter Values & Conditions`?**
-  _High betweenness centrality (0.106) - this node is a cross-community bridge._
-- **Why does `Transistor` connect `Relational Database Core` to `GOST Name Parsing`, `Transistor Attributes & Validation`, `Namespaces & Designation Model`?**
-  _High betweenness centrality (0.106) - this node is a cross-community bridge._
-- **What connects `Added`, `DuplicateExists`, `Added` to the rest of the system?**
-  _122 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Relational Database Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.07287093942054433 - nodes in this community are weakly interconnected._
-- **Should `Electrical Parameter Catalog` be split into smaller, more focused modules?**
-  _Cohesion score 0.050241545893719805 - nodes in this community are weakly interconnected._
-- **Should `JSONC Import Reader` be split into smaller, more focused modules?**
-  _Cohesion score 0.145748987854251 - nodes in this community are weakly interconnected._
+- **Why does `ElectricalParameter` connect `Parameter Values & Conditions` to `Parameter Catalog`, `Relational DML Core`, `DDL & Validation`, `Database Interface & SQLite`, `jsonc Import`, `Maximum Ratings & Details`?**
+  _High betweenness centrality (0.139) - this node is a cross-community bridge._
+- **Why does `Transistor` connect `Relational DML Core` to `Database Interface & SQLite`, `Project Structure`, `Maximum Ratings & Details`, `Designation Parser & Tests`, `Record Validator & Tests`?**
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+- **Are the 5 inferred relationships involving `ElectricalParameter` (e.g. with `.Conditions_AllSpecified_InCanonicalOrder()` and `.Conditions_WithoutConditions()`) actually correct?**
+  _`ElectricalParameter` has 5 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 8 inferred relationships involving `TransistorAttributes` (e.g. with `.HasAnyValue_AllFieldsEmpty_IsFalse()` and `.HasAnyValue_AnySingleFieldSet_IsTrue()`) actually correct?**
+  _`TransistorAttributes` has 8 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `KindVariantPairs`, `EquivalentSymbols`, `net10.0` to the rest of the system?**
+  _162 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Parameter Catalog` be split into smaller, more focused modules?**
+  _Cohesion score 0.06057945566286216 - nodes in this community are weakly interconnected._
