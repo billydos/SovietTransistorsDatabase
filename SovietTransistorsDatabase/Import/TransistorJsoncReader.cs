@@ -183,6 +183,7 @@ public static class TransistorJsoncReader
 
         TransistorAttributes? attributes = null;
         List<string>? manufacturers = null;
+        int issuesBeforeSections = result.Issues.Count;
         if (entry.TryGetProperty("attributes", out JsonElement attributesElement))
         {
             (attributes, manufacturers) = ReadAttributes(attributesElement, index, result);
@@ -190,6 +191,14 @@ public static class TransistorJsoncReader
 
         List<ElectricalParameter>? parameters = ReadParameters(entry, index, result);
         MaximumRatings? ratings = ReadRatings(entry, index, result);
+
+        // ошибка в любой секции — запись не применяется вовсе: иначе в базу попадало бы
+        // «голое» обозначение из заведомо ошибочного файла (а при обновлении — остальные
+        // секции при отвергнутой). Секция при этом отвергается целиком (см. ReadParameters).
+        if (result.Issues.Count > issuesBeforeSections)
+        {
+            return;
+        }
 
         result.Entries.Add(new TransistorEntryData
         {
