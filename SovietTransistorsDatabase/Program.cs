@@ -193,7 +193,8 @@ internal static class Program
         foreach (JsoncIssue issue in parsed.Issues)
         {
             string source = issue.Source is null ? "" : $" ({issue.Source})";
-            Console.Error.WriteLine($"Запись №{issue.EntryIndex}: {issue.Description}{source}");
+            string prefix = issue.EntryIndex is int entryIndex ? $"Запись №{entryIndex}: " : "";
+            Console.Error.WriteLine($"{prefix}{issue.Description}{source}");
         }
         Console.WriteLine($"Файл: {path}; корректных записей: {parsed.Entries.Count}, проблемных: {parsed.Issues.Count}");
 

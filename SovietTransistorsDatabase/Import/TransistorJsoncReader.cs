@@ -3,7 +3,8 @@ using SovietTransistorsDatabase.Domain;
 
 namespace SovietTransistorsDatabase.Import;
 
-public sealed record JsoncIssue(int EntryIndex, string Description, string? Source);
+/// <summary>Проблема разбора jsonc: EntryIndex = null — ошибка корневого уровня файла, иначе номер записи (с 1).</summary>
+public sealed record JsoncIssue(int? EntryIndex, string Description, string? Source);
 
 /// <summary>Запись справочника: обозначение + необязательные атрибуты, параметры, предельные данные.</summary>
 public sealed class TransistorEntryData
@@ -92,7 +93,7 @@ public static class TransistorJsoncReader
             {
                 if (property.Name != "transistors")
                 {
-                    result.Issues.Add(new JsoncIssue(0, $"неизвестный ключ корневого объекта «{property.Name}» (допустим только \"transistors\")", null));
+                    result.Issues.Add(new JsoncIssue(null, $"неизвестный ключ корневого объекта «{property.Name}» (допустим только \"transistors\")", null));
                 }
             }
             if (!root.TryGetProperty("transistors", out JsonElement array))
