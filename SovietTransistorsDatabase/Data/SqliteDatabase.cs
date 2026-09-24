@@ -43,7 +43,7 @@ public sealed class SqliteDatabase : RelationalTransistorDatabase
             Id            INTEGER PRIMARY KEY AUTOINCREMENT,
             Material      TEXT    NOT NULL,     -- 1. материал: Г|1, К|2, А|3, И|4
             Subclass      TEXT    NOT NULL,     -- 2. подкласс: Т или П
-            Assembly      TEXT        NULL,     -- 2.1. сборка: С (необязательно)
+            Assembly      INTEGER NOT NULL,     -- 2.1. сборка: 1 — буква «С» в обозначении, 0 — нет
             Feature       INTEGER NOT NULL,     -- 3. эксплуатационный признак: 1–9
             DevNumber     INTEGER NOT NULL,     -- 4. номер разработки: 01–999
             Letters       TEXT    NOT NULL,     -- 5. классификация: 1–2 заглавные русские буквы
@@ -51,7 +51,7 @@ public sealed class SqliteDatabase : RelationalTransistorDatabase
             ChipVariant   INTEGER     NULL,     -- 7. бескорпусное исполнение: 1–6 (необязательно)
             CONSTRAINT chk_material     CHECK (Material IN ('Г','1','К','2','А','3','И','4')),
             CONSTRAINT chk_subclass     CHECK (Subclass IN ('Т','П')),
-            CONSTRAINT chk_assembly     CHECK (Assembly IS NULL OR Assembly = 'С'),
+            CONSTRAINT chk_assembly     CHECK (Assembly IN (0, 1)),
             CONSTRAINT chk_feature      CHECK (Feature BETWEEN 1 AND 9),
             CONSTRAINT chk_dev_number   CHECK (DevNumber BETWEEN 1 AND 999),
             CONSTRAINT chk_letters      CHECK (Letters <> ''),

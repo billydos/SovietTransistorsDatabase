@@ -7,8 +7,11 @@ namespace SovietTransistorsDatabase.Data;
 
 /// <summary>
 /// Переносимая реляционная реализация: DML использует только переносимые конструкции
-/// (именованные параметры @имя, COALESCE, LIMIT, производные таблицы), совместимые с SQLite,
-/// PostgreSQL и MariaDB. Многошаговые операции записи (Save, Delete) выполняются в транзакции
+/// (именованные параметры @имя, LIMIT, производные таблицы), совместимые с SQLite,
+/// PostgreSQL и MariaDB. Булевы значения хранятся как INTEGER 0/1, отсутствие
+/// необязательного значения — NULL; сравнение колонок, допускающих NULL, —
+/// переносимый предикат «col = @p OR (col IS NULL AND @p IS NULL)» без сенти́нелов.
+/// Многошаговые операции записи (Save, Delete) выполняются в транзакции
 /// соединения: сбой в середине не оставляет частично применённую запись.
 /// Соединение — одно на экземпляр: открывается лениво при первом обращении и закрывается в Dispose.
 /// Для новой СУБД достаточно унаследовать класс и переопределить OpenConnection(),
@@ -165,8 +168,8 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         }
         if (query.IsAssembly is bool assembly)
         {
-            conditions.Add("COALESCE(Assembly, '') = COALESCE(@assembly, '')");
-            AddParameter(command, "@assembly", assembly ? "С" : DBNull.Value);
+            conditions.Add("Assembly = @assembly");
+            AddParameter(command, "@assembly", assembly ? 1 : 0);
         }
         if (query.Feature is int feature)
         {
@@ -185,12 +188,12 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         }
         if (query.Modification is int modification)
         {
-            conditions.Add("COALESCE(Modification, -1) = COALESCE(@modification, -1)");
+            conditions.Add("Modification = @modification");
             AddParameter(command, "@modification", modification);
         }
         if (query.ChipVariant is int chip)
         {
-            conditions.Add("COALESCE(ChipVariant, -1) = COALESCE(@chip, -1)");
+            conditions.Add("ChipVariant = @chip");
             AddParameter(command, "@chip", chip);
         }
         if (conditions.Count > 0)
@@ -434,7 +437,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             """ + " " + BuildExactMatch(command, transistor) + ")";
         AddParameter(command, "@material", transistor.Material.ToString());
         AddParameter(command, "@subclass", transistor.Subclass.ToString());
-        AddParameter(command, "@assembly", transistor.IsAssembly ? "С" : DBNull.Value);
+        AddParameter(command, "@assembly", transistor.IsAssembly ? 1 : 0);
         AddParameter(command, "@feature", transistor.Feature);
         AddParameter(command, "@dev_number", transistor.DevelopmentNumber);
         AddParameter(command, "@letters", transistor.Letters);
@@ -688,7 +691,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     {
         Material = reader.GetString(1)[0],
         Subclass = reader.GetString(2)[0],
-        IsAssembly = !reader.IsDBNull(3) && reader.GetString(3) == "С",
+        IsAssembly = reader.GetInt32(3) != 0,
         Feature = reader.GetInt32(4),
         DevelopmentNumber = reader.GetInt32(5),
         Letters = reader.GetString(6),
@@ -726,15 +729,17 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         AddParameter(command, p + "Feature", t.Feature);
         AddParameter(command, p + "DevNumber", t.DevelopmentNumber);
         AddParameter(command, p + "Letters", t.Letters);
-        AddParameter(command, p + "Assembly", t.IsAssembly ? "С" : DBNull.Value);
+        AddParameter(command, p + "Assembly", t.IsAssembly ? 1 : 0);
         AddParameter(command, p + "Modification", t.Modification is int m ? m : DBNull.Value);
         AddParameter(command, p + "ChipVariant", t.ChipVariant is int c ? c : DBNull.Value);
+        // обязательные колонки и Assembly (NOT NULL 0/1) — простое равенство;
+        // опциональные — NULL-безопасное равенство без сенти́нелов
         return $"""
             Subclass = {p}Subclass
             AND Feature = {p}Feature
             AND DevNumber = {p}DevNumber
             AND Letters = {p}Letters
-            AND (Assembly = {p}Assembly OR (Assembly IS NULL AND {p}Assembly IS NULL))
+            AND Assembly = {p}Assembly
             AND (Modification = {p}Modification OR (Modification IS NULL AND {p}Modification IS NULL))
             AND (ChipVariant = {p}ChipVariant OR (ChipVariant IS NULL AND {p}ChipVariant IS NULL))
             """;
