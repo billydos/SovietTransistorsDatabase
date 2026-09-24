@@ -123,12 +123,6 @@ public static class TransistorNameParser
             }
         }
 
-        if (i < s.Length)
-        {
-            error = $"позиция {i + 1}: лишние символы: «{s[i..]}»";
-            return false;
-        }
-
         transistor = new Transistor
         {
             Material = material,
