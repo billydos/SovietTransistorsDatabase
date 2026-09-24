@@ -246,13 +246,13 @@ internal static class Program
         if (options.TryGetValue("--number", out string? numberValue))
             query = query with { DevelopmentNumber = ParseIntOption("--number", numberValue, 1, 999) };
         if (options.TryGetValue("--letters", out string? lettersValue))
-            query = query with { Letters = lettersValue.ToUpperInvariant() };
+            query = query with { Letters = ParseLettersOption(lettersValue) };
         if (options.TryGetValue("--modification", out string? modificationValue))
             query = query with { Modification = ParseIntOption("--modification", modificationValue, 1, 9) };
         if (options.TryGetValue("--chip", out string? chipValue))
             query = query with { ChipVariant = ParseIntOption("--chip", chipValue, 1, 6) };
         if (options.TryGetValue("--limit", out string? limitValue))
-            query = query with { Limit = ParseIntOption("--limit", limitValue, 1, int.MaxValue) };
+            query = query with { Limit = ParseIntOption("--limit", limitValue, 1) };
 
         using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         IReadOnlyList<Transistor> rows = db.Query(query);
@@ -507,6 +507,16 @@ internal static class Program
             ? value[0]
             : throw new ArgumentException($"--subclass: ожидалось Т или П, получено «{value}»");
 
+    private static string ParseLettersOption(string value)
+    {
+        string letters = value.ToUpperInvariant();
+        if (!Cyrillic.IsUpperLetters(letters))
+        {
+            throw new ArgumentException($"--letters: ожидалась одна или две заглавные русские буквы, получено «{value}»");
+        }
+        return letters;
+    }
+
     private static bool ParseBoolOption(string name, string value) => value.ToLowerInvariant() switch
     {
         "true" or "да" => true,
@@ -514,11 +524,12 @@ internal static class Program
         _ => throw new ArgumentException($"{name}: ожидалось true/false, получено «{value}»"),
     };
 
-    private static int ParseIntOption(string name, string value, int min, int max)
+    private static int ParseIntOption(string name, string value, int min, int max = int.MaxValue)
     {
         if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int result) || result < min || result > max)
         {
-            throw new ArgumentException($"{name}: ожидалось целое от {min} до {max}, получено «{value}»");
+            string range = max == int.MaxValue ? $"не меньше {min}" : $"от {min} до {max}";
+            throw new ArgumentException($"{name}: ожидалось целое {range}, получено «{value}»");
         }
         return result;
     }
