@@ -44,9 +44,10 @@ public static class TransistorJsoncReader
     private static readonly string[] DetailFields = { "attributes", "parameters", "ratings" };
 
     private static readonly string[] ParameterFields =
-    {
-        "parameter", "min", "max", "Uke", "Ukb", "Ueb", "Ik", "Ie", "Ib", "freq", "Rg", "Rbe", "temp",
-    };
+        new[] { "parameter", "min", "max" }
+            .Concat(ConditionKeys.All.Select(ConditionKeys.JsoncKey))
+            .Append("temp")
+            .ToArray();
 
     private static readonly string[] RatingFields =
     {

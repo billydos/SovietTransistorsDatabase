@@ -4,235 +4,270 @@ namespace SovietTransistorsDatabase.Tests;
 
 public class ElectricalParameterValidatorTests
 {
-    private static ElectricalParameter P(ParameterKind kind, double? min = null, double? max = null,
-        double? uke = null, double? ukb = null, double? ueb = null, double? ik = null, double? ie = null,
-        double? ib = null, double? freq = null, double? rg = null, double? rbe = null) => new()
+    private static readonly IReadOnlyDictionary<ConditionKey, double> SampleValues = new Dictionary<ConditionKey, double>
     {
-        Kind = kind,
-        ValueMin = min,
-        ValueMax = max,
-        Uke = uke,
-        Ukb = ukb,
-        Ueb = ueb,
-        Ik = ik,
-        Ie = ie,
-        Ib = ib,
-        Freq = freq,
-        Rg = rg,
-        Rbe = rbe,
+        [ConditionKey.Uke] = 10,
+        [ConditionKey.Ukb] = 5,
+        [ConditionKey.Ueb] = 5,
+        [ConditionKey.Ik] = 1,
+        [ConditionKey.Ie] = 10,
+        [ConditionKey.Ib] = 50,
+        [ConditionKey.Freq] = 1.8,
+        [ConditionKey.Rg] = 500,
+        [ConditionKey.Rbe] = 100,
     };
 
-    private static IReadOnlyList<string> Errors(ParameterKind kind, double? min = null, double? max = null,
-        double? uke = null, double? ukb = null, double? ueb = null, double? ik = null, double? ie = null,
-        double? ib = null, double? freq = null, double? rg = null, double? rbe = null) =>
-        ElectricalParameterValidator.Errors(P(kind, min, max, uke, ukb, ueb, ik, ie, ib, freq, rg, rbe));
-
-    public static TheoryData<ConditionRule, ElectricalParameter> OneValidParameterPerRule => new()
+    public static TheoryData<ParameterKind, int> KindVariantPairs
     {
-        { ConditionRule.PairUkeIkOrUkbIe, P(ParameterKind.H21E, min: 50, uke: 10, ik: 1) },
-        { ConditionRule.PairUkeIkOrUkbIe, P(ParameterKind.CutoffFrequency, min: 5, ukb: 5, ie: 1) },
-        { ConditionRule.ExactlyOneCurrent, P(ParameterKind.CutoffVoltage, min: 30, ik: 1) },
-        { ConditionRule.ExactlyOneCurrent, P(ParameterKind.CollectorEmitterSaturation, max: 0.5, ie: 10) },
-        { ConditionRule.OnlyUkb, P(ParameterKind.CollectorCutoffCurrent, max: 1, ukb: 10) },
-        { ConditionRule.OnlyUeb, P(ParameterKind.EmitterCutoffCurrent, max: 0.5, ueb: 5) },
-        { ConditionRule.OnlyUke, P(ParameterKind.CollectorEmitterCutoffCurrent, max: 20, uke: 15) },
-        { ConditionRule.UkeAndRbe, P(ParameterKind.CollectorEmitterCutoffCurrentRbe, max: 5, uke: 10, rbe: 100) },
-        { ConditionRule.UkeAndIk, P(ParameterKind.InputResistance, min: 200, uke: 5, ik: 1) },
-        { ConditionRule.UkbAndIe, P(ParameterKind.H21B, min: 10, ukb: 5, ie: 10) },
-        { ConditionRule.UkbAndIe, P(ParameterKind.FeedbackTimeConstant, max: 300, ukb: 5, ie: 1) },
-        { ConditionRule.IkAndIb, P(ParameterKind.SwitchOnTime, max: 500, ik: 500, ib: 50) },
-        { ConditionRule.IkAndIb, P(ParameterKind.SwitchOffTime, max: 1500, ik: 500, ib: 50) },
-        { ConditionRule.PairPlusFrequency, P(ParameterKind.NoiseFigure, max: 4, uke: 5, ik: 1, freq: 1.8, rg: 500) },
-        { ConditionRule.PairPlusFrequency, P(ParameterKind.NoiseFigure, max: 4, ukb: 5, ie: 1, freq: 1.8) },
-        { ConditionRule.FrequencyPlusOptionalUkeIk, P(ParameterKind.OutputPower, min: 5, freq: 100) },
-        { ConditionRule.FrequencyPlusOptionalUkeIk, P(ParameterKind.PowerGain, min: 10, uke: 10, ik: 100, freq: 100) },
-        { ConditionRule.FrequencyPlusOptionalUkeIk, P(ParameterKind.CollectorEfficiency, min: 50, freq: 100) },
-    };
+        get
+        {
+            var data = new TheoryData<ParameterKind, int>();
+            foreach (ParameterInfo info in ElectricalParameterCatalog.All.Values)
+                for (int index = 0; index < info.Conditions.Variants.Count; index++)
+                    data.Add(info.Kind, index);
+            return data;
+        }
+    }
+
+    /// <summary>Параметр с границей по правилу вида (min/max) и условиями из обязательных ключей варианта (без одного ключа).</summary>
+    private static ElectricalParameter FromVariant(ParameterKind kind, ConditionVariant variant, ConditionKey? except = null)
+    {
+        ElectricalParameter parameter = WithBounds(kind, new ElectricalParameter { Kind = kind });
+        foreach (ConditionKey key in variant.Required)
+            if (key != except)
+                parameter = ConditionKeys.WithValue(parameter, key, SampleValues[key]);
+        return parameter;
+    }
+
+    private static ElectricalParameter WithBounds(ParameterKind kind, ElectricalParameter parameter)
+    {
+        ParameterInfo info = ElectricalParameterCatalog.Info(kind);
+        return info.Direction switch
+        {
+            BoundDirection.AtLeast => parameter with { ValueMin = 50 },
+            BoundDirection.AtMost => parameter with { ValueMax = 1 },
+            BoundDirection.AtLeastOrRange => parameter with { ValueMin = 50 },
+            _ => parameter,
+        };
+    }
+
+    private static bool SatisfiedByOtherVariant(ConditionSpec spec, ElectricalParameter parameter, int exceptIndex) =>
+        spec.Variants.Where((_, index) => index != exceptIndex).Any(variant => variant.IsSatisfiedBy(parameter));
 
     [Theory]
-    [MemberData(nameof(OneValidParameterPerRule))]
-    public void ValidParameter_EachConditionRule_NoErrors(ConditionRule rule, ElectricalParameter parameter)
+    [MemberData(nameof(KindVariantPairs))]
+    public void RequiredKeysOnly_NoErrors(ParameterKind kind, int variantIndex)
     {
-        Assert.Equal(rule, ElectricalParameterCatalog.Info(parameter.Kind).Rule);
+        ConditionVariant variant = ElectricalParameterCatalog.Info(kind).Conditions.Variants[variantIndex];
 
+        Assert.Empty(ElectricalParameterValidator.Errors(FromVariant(kind, variant)));
+    }
+
+    [Theory]
+    [MemberData(nameof(KindVariantPairs))]
+    public void MissingRequiredKey_ProducesConditionError(ParameterKind kind, int variantIndex)
+    {
+        ConditionSpec spec = ElectricalParameterCatalog.Info(kind).Conditions;
+        ConditionVariant variant = spec.Variants[variantIndex];
+
+        foreach (ConditionKey required in variant.Required)
+        {
+            ElectricalParameter parameter = FromVariant(kind, variant, except: required);
+            IReadOnlyList<string> errors = ElectricalParameterValidator.Errors(parameter);
+            if (!SatisfiedByOtherVariant(spec, parameter, variantIndex))
+                Assert.Contains(errors, error => error.Contains("условия —"));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(KindVariantPairs))]
+    public void ForbiddenKey_ProducesConditionError(ParameterKind kind, int variantIndex)
+    {
+        ConditionSpec spec = ElectricalParameterCatalog.Info(kind).Conditions;
+        ConditionVariant variant = spec.Variants[variantIndex];
+
+        foreach (ConditionKey forbidden in ConditionKeys.All
+                     .Where(key => !variant.Required.Contains(key) && !variant.Optional.Contains(key)))
+        {
+            ElectricalParameter parameter = ConditionKeys.WithValue(FromVariant(kind, variant), forbidden, SampleValues[forbidden]);
+            IReadOnlyList<string> errors = ElectricalParameterValidator.Errors(parameter);
+            if (!SatisfiedByOtherVariant(spec, parameter, variantIndex))
+                Assert.Contains(errors, error => error.Contains("условия —"));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(KindVariantPairs))]
+    public void OptionalKey_AddedToRequiredSet_NoErrors(ParameterKind kind, int variantIndex)
+    {
+        ConditionVariant variant = ElectricalParameterCatalog.Info(kind).Conditions.Variants[variantIndex];
+
+        foreach (ConditionKey optional in variant.Optional)
+        {
+            ElectricalParameter parameter = ConditionKeys.WithValue(FromVariant(kind, variant), optional, SampleValues[optional]);
+            Assert.Empty(ElectricalParameterValidator.Errors(parameter));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(KindVariantPairs))]
+    public void Temp_IsAllowedWithAnyConditions(ParameterKind kind, int variantIndex)
+    {
+        ConditionVariant variant = ElectricalParameterCatalog.Info(kind).Conditions.Variants[variantIndex];
+
+        ElectricalParameter parameter = FromVariant(kind, variant) with { Temp = 25 };
         Assert.Empty(ElectricalParameterValidator.Errors(parameter));
     }
 
     [Fact]
-    public void PairUkeIkOrUkbIe_RequiresExactlyOnePair()
+    public void ConditionViolation_ProducesSingleMessage()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50), e => e.Contains("ровно пара"));
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10), e => e.Contains("ровно пара"));
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10, ie: 1), e => e.Contains("ровно пара"));
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10, ik: 1, ukb: 5), e => e.Contains("ровно пара"));
+        var errors = ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.H21E,
+            ValueMin = 50,
+            Ib = 10,
+        });
+
+        Assert.Equal(1, errors.Count(error => error.Contains("условия —")));
+        Assert.Contains(errors, error => error.Contains("задано: Iб (Ib)"));
     }
 
     [Fact]
-    public void ExactlyOneCurrent_RequiresOneCurrentAndNoVoltage()
+    public void Describe_JoinsVariantsWithEither()
     {
-        string fragment = "только ток коллектора (Ik) или только ток эмиттера (Ie)";
-        Assert.Contains(Errors(ParameterKind.CutoffVoltage, min: 30), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CutoffVoltage, min: 30, ik: 1, ie: 1), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CutoffVoltage, min: 30, ik: 1, uke: 10), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void OnlyUkb_RejectsMissingOrExtraConditions()
-    {
-        string fragment = "только напряжение коллектор-база (Ukb)";
-        Assert.Contains(Errors(ParameterKind.CollectorCutoffCurrent, max: 1), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CollectorCutoffCurrent, max: 1, ukb: 10, uke: 10), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CollectorCutoffCurrent, max: 1, ukb: 10, ik: 1), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void OnlyUeb_RejectsMissingOrExtraConditions()
-    {
-        string fragment = "только напряжение эмиттер-база (Ueb)";
-        Assert.Contains(Errors(ParameterKind.EmitterCutoffCurrent, max: 1), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.EmitterCutoffCurrent, max: 1, ueb: 5, uke: 5), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void OnlyUke_RejectsMissingOrExtraConditions()
-    {
-        string fragment = "только напряжение коллектор-эмиттер (Uke)";
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrent, max: 20), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrent, max: 20, uke: 15, ie: 1), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void UkeAndRbe_RequiresBoth()
-    {
-        string fragment = "Uкэ (Uke) и сопротивление в цепи база-эмиттер (Rbe, Ом)";
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrentRbe, max: 5, uke: 10), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrentRbe, max: 5, uke: 10, rbe: 100, ik: 1), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void UkeAndIk_RequiresBoth()
-    {
-        string fragment = "Uкэ (Uke) и Iк (Ik)";
-        Assert.Contains(Errors(ParameterKind.InputResistance, min: 200, uke: 5), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.InputResistance, min: 200, ik: 1, ukb: 5), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void UkbAndIe_RequiresBoth()
-    {
-        string fragment = "Uкб (Ukb) и Iэ (Ie)";
-        Assert.Contains(Errors(ParameterKind.H21B, min: 10, ukb: 5), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.H21B, min: 10, ie: 10, uke: 5), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void IkAndIb_RequiresBoth()
-    {
-        string fragment = "Iк (Ik) и Iб (Ib)";
-        Assert.Contains(Errors(ParameterKind.SwitchOnTime, max: 500, ik: 500), e => e.Contains(fragment));
-        Assert.Contains(Errors(ParameterKind.SwitchOffTime, max: 1500, ib: 50, uke: 5), e => e.Contains(fragment));
-    }
-
-    [Fact]
-    public void PairPlusFrequency_RequiresPairAndFrequency()
-    {
-        Assert.Contains(Errors(ParameterKind.NoiseFigure, max: 4, uke: 5, ik: 1), e => e.Contains("обязательна частота измерения (freq, МГц)"));
-        string pairFragment = "пара Uкэ + Iк (Uke, Ik) либо Uкб + Iэ (Ukb, Ie)";
-        Assert.Contains(Errors(ParameterKind.NoiseFigure, max: 4, freq: 1.8), e => e.Contains(pairFragment));
-        Assert.Contains(Errors(ParameterKind.NoiseFigure, max: 4, uke: 5, ie: 1, freq: 1.8), e => e.Contains(pairFragment));
-    }
-
-    [Fact]
-    public void FrequencyPlusOptionalUkeIk_RequiresFrequencyAndPairedUkeIk()
-    {
-        Assert.Contains(Errors(ParameterKind.OutputPower, min: 5), e => e.Contains("обязательна частота (freq, МГц)"));
-        Assert.Contains(Errors(ParameterKind.OutputPower, min: 5, uke: 10, freq: 100), e => e.Contains("задаются только вместе"));
-        Assert.Contains(Errors(ParameterKind.OutputPower, min: 5, uke: 10, ik: 1, ie: 1, freq: 100), e => e.Contains("допускаются только Uke + Ik"));
+        Assert.Equal("Uкэ (Uke) + Iк (Ik) либо Uкб (Ukb) + Iэ (Ie)", ConditionSpecs.PairUkeIkOrUkbIe.Describe());
+        Assert.Equal("Iк (Ik) либо Iэ (Ie)", ConditionSpecs.ExactlyOneCurrent.Describe());
+        Assert.Equal("Uкэ (Uke)", ConditionSpecs.OnlyUke.Describe());
     }
 
     [Fact]
     public void AtLeastParameter_RequiresMinAndForbidsMax()
     {
-        Assert.Contains(Errors(ParameterKind.CutoffFrequency), e => e.Contains("обязательно значение «не менее» (min)"));
-        Assert.Contains(Errors(ParameterKind.CutoffFrequency, min: 5, max: 10, uke: 10, ik: 1), e => e.Contains("верхняя граница (max) не допускается"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter { Kind = ParameterKind.CutoffFrequency }),
+            e => e.Contains("обязательно значение «не менее» (min)"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.CutoffFrequency,
+            ValueMin = 5,
+            ValueMax = 10,
+            Uke = 10,
+            Ik = 1,
+        }), e => e.Contains("верхняя граница (max) не допускается"));
     }
 
     [Fact]
     public void AtMostParameter_RequiresMaxAndForbidsMin()
     {
-        Assert.Contains(Errors(ParameterKind.CollectorCutoffCurrent, ukb: 10), e => e.Contains("обязательно значение «не более» (max)"));
-        Assert.Contains(Errors(ParameterKind.CollectorCutoffCurrent, min: 0.5, max: 1, ukb: 10), e => e.Contains("нижняя граница (min) не допускается"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter { Kind = ParameterKind.CollectorCutoffCurrent, Ukb = 10 }),
+            e => e.Contains("обязательно значение «не более» (max)"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.CollectorCutoffCurrent,
+            ValueMin = 0.5,
+            ValueMax = 1,
+            Ukb = 10,
+        }), e => e.Contains("нижняя граница (min) не допускается"));
     }
 
     [Fact]
     public void AtLeastOrRangeParameter_RequiresMin_MaxOptional()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, uke: 10, ik: 1), e => e.Contains("обязательна нижняя граница (min)"));
-        Assert.Empty(ElectricalParameterValidator.Errors(P(ParameterKind.H21E, min: 50, max: 200, uke: 10, ik: 1)));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter { Kind = ParameterKind.H21E, Uke = 10, Ik = 1 }),
+            e => e.Contains("обязательна нижняя граница (min)"));
+        Assert.Empty(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.H21E,
+            ValueMin = 50,
+            ValueMax = 200,
+            Uke = 10,
+            Ik = 1,
+        }));
     }
 
     [Fact]
     public void RangeWithMinAboveMax_ProducesError()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 200, max: 50, uke: 10, ik: 1), e => e.Contains("нижняя граница больше верхней"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.H21E,
+            ValueMin = 200,
+            ValueMax = 50,
+            Uke = 10,
+            Ik = 1,
+        }), e => e.Contains("нижняя граница больше верхней"));
     }
 
     [Fact]
     public void NonPositiveValues_ProduceErrors()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, min: -50, uke: 10, ik: 1), e => e.Contains("значение должно быть положительным"));
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, max: 0, uke: 10, ik: 1), e => e.Contains("значение должно быть положительным"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.H21E,
+            ValueMin = -50,
+            Uke = 10,
+            Ik = 1,
+        }), e => e.Contains("значение должно быть положительным"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.H21E,
+            ValueMin = 50,
+            ValueMax = 0,
+            Uke = 10,
+            Ik = 1,
+        }), e => e.Contains("значение должно быть положительным"));
     }
 
     [Fact]
-    public void EfficiencyAbove100_ProducesError()
+    public void NonPositiveConditions_ProduceErrorsForEachKey()
     {
-        Assert.Contains(Errors(ParameterKind.CollectorEfficiency, min: 101, freq: 100), e => e.Contains("КПД не может превышать 100%"));
+        foreach (ConditionKey key in ConditionKeys.All)
+        {
+            foreach (ParameterInfo info in ElectricalParameterCatalog.All.Values)
+            {
+                ConditionVariant? variant = info.Conditions.Variants.FirstOrDefault(v => v.Required.Contains(key) || v.Optional.Contains(key));
+                if (variant is null) continue;
+
+                ElectricalParameter parameter = ConditionKeys.WithValue(FromVariant(info.Kind, variant), key, 0);
+                Assert.Contains(ElectricalParameterValidator.Errors(parameter),
+                    e => e.Contains(ConditionKeys.NonPositiveMessage(key)));
+            }
+        }
     }
 
     [Fact]
-    public void Frequency_OnlyAllowedForFrequencyKinds()
+    public void EfficiencyAboveCeiling_ProducesError()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10, ik: 1, freq: 1), e => e.Contains("частота (freq) допускается только у частотных параметров"));
+        Assert.Contains(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.CollectorEfficiency,
+            ValueMin = 101,
+            Freq = 100,
+        }), e => e.Contains("не может превышать 100 %"));
     }
 
     [Fact]
-    public void Rg_OnlyAllowedForNoiseFigure()
+    public void EfficiencyWithinCeiling_NoErrors()
     {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10, ik: 1, rg: 500), e => e.Contains("сопротивление генератора (Rg) допускается только у KShum"));
-    }
-
-    [Fact]
-    public void Rbe_OnlyAllowedForIkep()
-    {
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrent, max: 20, uke: 15, rbe: 100), e => e.Contains("допускается только у Ikep"));
-    }
-
-    [Fact]
-    public void Ib_OnlyAllowedForSwitchingTimes()
-    {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 10, ik: 1, ib: 10), e => e.Contains("ток базы (Ib) как условие допускается только у Ton/Toff"));
-    }
-
-    [Fact]
-    public void NonPositiveConditions_ProduceErrors()
-    {
-        Assert.Contains(Errors(ParameterKind.H21E, min: 50, uke: 0, ik: 1), e => e.Contains("условие Uкэ должно быть положительным"));
-        Assert.Contains(Errors(ParameterKind.SwitchOnTime, max: 500, ik: 0, ib: 50), e => e.Contains("условие Iк должно быть положительным"));
-        Assert.Contains(Errors(ParameterKind.NoiseFigure, max: 4, uke: 5, ik: 1, freq: 0), e => e.Contains("частота должна быть положительной"));
-        Assert.Contains(Errors(ParameterKind.NoiseFigure, max: 4, uke: 5, ik: 1, freq: 1.8, rg: -500), e => e.Contains("сопротивление генератора должно быть положительным"));
-        Assert.Contains(Errors(ParameterKind.CollectorEmitterCutoffCurrentRbe, max: 5, uke: 10, rbe: 0), e => e.Contains("сопротивление Rбэ должно быть положительным"));
+        Assert.Empty(ElectricalParameterValidator.Errors(new ElectricalParameter
+        {
+            Kind = ParameterKind.CollectorEfficiency,
+            ValueMin = 100,
+            Freq = 100,
+        }));
     }
 }
 
 public class ElectricalParameterCatalogTests
 {
     [Fact]
-    public void EveryConditionRule_IsUsedByCatalog()
+    public void EveryParameter_HasConditionSpecWithVariant()
     {
-        var usedRules = ElectricalParameterCatalog.All.Values.Select(info => info.Rule).ToHashSet();
-
-        Assert.Equal(Enum.GetValues<ConditionRule>().ToHashSet(), usedRules);
+        foreach (ParameterInfo info in ElectricalParameterCatalog.All.Values)
+        {
+            Assert.NotNull(info.Conditions);
+            Assert.NotEmpty(info.Conditions.Variants);
+        }
     }
 
     [Fact]
@@ -250,10 +285,22 @@ public class ElectricalParameterCatalogTests
     }
 
     [Fact]
-    public void FrequencyCodesList_MatchesFrequencyKinds()
+    public void FrequencyKinds_RequireFrequencyInEveryVariant()
     {
-        var codes = ElectricalParameterCatalog.FrequencyCodesList.Split(", ").ToHashSet();
+        var frequencyKinds = new[] { ParameterKind.NoiseFigure, ParameterKind.OutputPower, ParameterKind.PowerGain, ParameterKind.CollectorEfficiency };
 
-        Assert.Equal(new HashSet<string> { "KShum", "KUr", "PVyh", "Kpd" }, codes);
+        foreach (ParameterKind kind in frequencyKinds)
+            Assert.All(ElectricalParameterCatalog.Info(kind).Conditions.Variants,
+                variant => Assert.Contains(ConditionKey.Freq, variant.Required));
+    }
+
+    [Fact]
+    public void OnlyUkeAndRbe_AreAllowedForIkep()
+    {
+        ConditionSpec spec = ElectricalParameterCatalog.Info(ParameterKind.CollectorEmitterCutoffCurrentRbe).Conditions;
+
+        Assert.True(spec.Allows(ConditionKey.Uke));
+        Assert.True(spec.Allows(ConditionKey.Rbe));
+        Assert.DoesNotContain(ConditionKey.Uke, spec.Variants.SelectMany(variant => variant.Optional));
     }
 }

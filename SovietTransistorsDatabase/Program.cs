@@ -587,6 +587,31 @@ internal static class Program
         return 1;
     }
 
+    /// <summary>Раздел справки о параметрах: строки собираются из каталога, а не дублируются вручную.</summary>
+    private static string DescribeParameters()
+    {
+        var lines = new List<string> { "Электрические параметры (jsonc, ключ \"parameters\"), коды:" };
+        foreach (ParameterInfo info in ElectricalParameterCatalog.All.Values.OrderBy(info => info.Kind))
+        {
+            string unit = info.Unit is null ? "раз" : info.Unit;
+            string bounds = info.Direction switch
+            {
+                BoundDirection.AtLeast => "min",
+                BoundDirection.AtMost => "max",
+                BoundDirection.AtLeastOrRange => "min [max]",
+                _ => throw new InvalidOperationException($"неизвестное правило границ: {info.Direction}"),
+            };
+            string line = $"  {info.Code} ({unit}) — {info.DisplayName}: {bounds}; условия: {info.Conditions.Describe()}";
+            if (info.ValueCeiling is double ceiling)
+                line += $" (не более {ParameterText.Fmt(ceiling)} {info.Unit})";
+            lines.Add(line);
+        }
+        string conditionKeys = string.Join(", ", ConditionKeys.All
+            .Select(key => $"{ConditionKeys.JsoncKey(key)} ({ConditionKeys.Unit(key)})"));
+        lines.Add($"  min/max — значение, условия: {conditionKeys}, temp (°C).");
+        return string.Join("\n", lines);
+    }
+
     private static int PrintHelp()
     {
         Console.WriteLine("""
@@ -629,18 +654,7 @@ internal static class Program
               буквы:      1–2 заглавные русские буквы
               модификация: цифра 1–9
               бескорпусное исполнение: дефис и цифра 1–6
-
-            Электрические параметры (jsonc, ключ "parameters"), коды:
-              h21e (раз) — коэф. передачи тока ОЭ: min [max]; пара Uke+Ik либо Ukb+Ie
-              h21b (раз) — коэф. передачи тока ОБ: min [max]; Ukb+Ie
-              FGran (МГц) — граничная частота: min; пара Uke+Ik либо Ukb+Ie
-              UGran (В), UkeNas/UbeNas (В), Ikbo/Iebo/Ikeo (мкА), h11 (Ом),
-              Ck/Ce (пФ), Tauk (пс), Ton/Toff (нс), KShum (дБ), PVyh (Вт), KUr (дБ), Kpd (%)
-              UGran/UkeNas/UbeNas: только Ik или только Ie; Ikbo, Ck: только Ukb;
-              Iebo, Ce: только Ueb; Ikeo: только Uke; Ikep: Uke+Rbe; h11: Uke+Ik;
-              Tauk, h21b: Ukb+Ie; Ton/Toff: Ik+Ib; KShum: пара + freq + [Rg];
-              PVyh/KUr/Kpd: freq + (Uke+Ik вместе или не заданы)
-              min/max — значение, условия: Uke/Ukb/Ueb (В), Ik/Ie/Ib (мА), freq (МГц), Rg/Rbe (Ом), temp (°C).
+            """ + "\n\n" + DescribeParameters() + "\n" + """
             Атрибуты (jsonc, ключ "attributes"): structure (npn/pnp/n-fet...), technology, package,
               packageMaterial, colorMarking, pinout, esdSensitive/militaryGrade/radiationHardened (bool),
               tu, notes, yearFrom/yearTo (1949–2100), massMax (г), datasheetUrl;

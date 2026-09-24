@@ -29,77 +29,50 @@ public enum ParameterKind
 /// <summary>«Не менее» (только min), «не более» (только max) или «не менее либо диапазон» (min обязателен, max опционален).</summary>
 public enum BoundDirection { AtLeast, AtMost, AtLeastOrRange }
 
-public enum ConditionRule
-{
-    PairUkeIkOrUkbIe,
-    ExactlyOneCurrent,
-    OnlyUkb,
-    OnlyUeb,
-    UkeAndIk,
-    UkbAndIe,
-    OnlyUke,
-    UkeAndRbe,
-    IkAndIb,
-    PairPlusFrequency,
-    FrequencyPlusOptionalUkeIk,
-}
-
+/// <summary>Параметр справочника: код jsonc, название, единица, правило границ, спецификация условий и потолок значения.</summary>
 public sealed record ParameterInfo(
     ParameterKind Kind,
     string Code,
     string DisplayName,
     string? Unit,
     BoundDirection Direction,
-    ConditionRule Rule);
+    ConditionSpec Conditions,
+    double? ValueCeiling = null);
 
 public static class ElectricalParameterCatalog
 {
-    /// <summary>Словарь параметров: код, название, каноническая единица, правило границы, правило условий.</summary>
+    /// <summary>Словарь параметров: код, название, каноническая единица, правило границ, спецификация условий, потолок значения.</summary>
     public static readonly IReadOnlyDictionary<ParameterKind, ParameterInfo> All =
         new Dictionary<ParameterKind, ParameterInfo>
         {
-            [ParameterKind.H21E] = new(ParameterKind.H21E, "h21e", "Статический коэффициент передачи тока (ОЭ)", null, BoundDirection.AtLeastOrRange, ConditionRule.PairUkeIkOrUkbIe),
-            [ParameterKind.H21B] = new(ParameterKind.H21B, "h21b", "Коэффициент передачи тока (ОБ)", null, BoundDirection.AtLeastOrRange, ConditionRule.UkbAndIe),
-            [ParameterKind.CutoffFrequency] = new(ParameterKind.CutoffFrequency, "FGran", "Граничная частота коэффициента передачи тока", "МГц", BoundDirection.AtLeast, ConditionRule.PairUkeIkOrUkbIe),
-            [ParameterKind.CutoffVoltage] = new(ParameterKind.CutoffVoltage, "UGran", "Граничное напряжение", "В", BoundDirection.AtLeast, ConditionRule.ExactlyOneCurrent),
-            [ParameterKind.CollectorEmitterSaturation] = new(ParameterKind.CollectorEmitterSaturation, "UkeNas", "Напряжение насыщения коллектор-эмиттер", "В", BoundDirection.AtMost, ConditionRule.ExactlyOneCurrent),
-            [ParameterKind.BaseEmitterSaturation] = new(ParameterKind.BaseEmitterSaturation, "UbeNas", "Напряжение насыщения база-эмиттер", "В", BoundDirection.AtMost, ConditionRule.ExactlyOneCurrent),
-            [ParameterKind.CollectorCutoffCurrent] = new(ParameterKind.CollectorCutoffCurrent, "Ikbo", "Обратный ток коллектора", "мкА", BoundDirection.AtMost, ConditionRule.OnlyUkb),
-            [ParameterKind.EmitterCutoffCurrent] = new(ParameterKind.EmitterCutoffCurrent, "Iebo", "Обратный ток эмиттера", "мкА", BoundDirection.AtMost, ConditionRule.OnlyUeb),
-            [ParameterKind.CollectorEmitterCutoffCurrent] = new(ParameterKind.CollectorEmitterCutoffCurrent, "Ikeo", "Обратный ток коллектор-эмиттер", "мкА", BoundDirection.AtMost, ConditionRule.OnlyUke),
-            [ParameterKind.CollectorEmitterCutoffCurrentRbe] = new(ParameterKind.CollectorEmitterCutoffCurrentRbe, "Ikep", "Обратный ток коллектор-эмиттер при заданном Rбэ", "мкА", BoundDirection.AtMost, ConditionRule.UkeAndRbe),
-            [ParameterKind.InputResistance] = new(ParameterKind.InputResistance, "h11", "Входное сопротивление", "Ом", BoundDirection.AtLeast, ConditionRule.UkeAndIk),
-            [ParameterKind.CollectorJunctionCapacitance] = new(ParameterKind.CollectorJunctionCapacitance, "Ck", "Ёмкость коллекторного перехода", "пФ", BoundDirection.AtMost, ConditionRule.OnlyUkb),
-            [ParameterKind.EmitterJunctionCapacitance] = new(ParameterKind.EmitterJunctionCapacitance, "Ce", "Ёмкость эмиттерного перехода", "пФ", BoundDirection.AtMost, ConditionRule.OnlyUeb),
-            [ParameterKind.FeedbackTimeConstant] = new(ParameterKind.FeedbackTimeConstant, "Tauk", "Постоянная времени цепи обратной связи", "пс", BoundDirection.AtMost, ConditionRule.UkbAndIe),
-            [ParameterKind.SwitchOnTime] = new(ParameterKind.SwitchOnTime, "Ton", "Время включения", "нс", BoundDirection.AtMost, ConditionRule.IkAndIb),
-            [ParameterKind.SwitchOffTime] = new(ParameterKind.SwitchOffTime, "Toff", "Время выключения (рассасывания)", "нс", BoundDirection.AtMost, ConditionRule.IkAndIb),
-            [ParameterKind.NoiseFigure] = new(ParameterKind.NoiseFigure, "KShum", "Коэффициент шума", "дБ", BoundDirection.AtMost, ConditionRule.PairPlusFrequency),
-            [ParameterKind.OutputPower] = new(ParameterKind.OutputPower, "PVyh", "Выходная мощность", "Вт", BoundDirection.AtLeast, ConditionRule.FrequencyPlusOptionalUkeIk),
-            [ParameterKind.PowerGain] = new(ParameterKind.PowerGain, "KUr", "Коэффициент усиления по мощности", "дБ", BoundDirection.AtLeast, ConditionRule.FrequencyPlusOptionalUkeIk),
-            [ParameterKind.CollectorEfficiency] = new(ParameterKind.CollectorEfficiency, "Kpd", "КПД коллектора", "%", BoundDirection.AtLeast, ConditionRule.FrequencyPlusOptionalUkeIk),
+            [ParameterKind.H21E] = new(ParameterKind.H21E, "h21e", "Статический коэффициент передачи тока (ОЭ)", null, BoundDirection.AtLeastOrRange, ConditionSpecs.PairUkeIkOrUkbIe),
+            [ParameterKind.H21B] = new(ParameterKind.H21B, "h21b", "Коэффициент передачи тока (ОБ)", null, BoundDirection.AtLeastOrRange, ConditionSpecs.UkbAndIe),
+            [ParameterKind.CutoffFrequency] = new(ParameterKind.CutoffFrequency, "FGran", "Граничная частота коэффициента передачи тока", "МГц", BoundDirection.AtLeast, ConditionSpecs.PairUkeIkOrUkbIe),
+            [ParameterKind.CutoffVoltage] = new(ParameterKind.CutoffVoltage, "UGran", "Граничное напряжение", "В", BoundDirection.AtLeast, ConditionSpecs.ExactlyOneCurrent),
+            [ParameterKind.CollectorEmitterSaturation] = new(ParameterKind.CollectorEmitterSaturation, "UkeNas", "Напряжение насыщения коллектор-эмиттер", "В", BoundDirection.AtMost, ConditionSpecs.ExactlyOneCurrent),
+            [ParameterKind.BaseEmitterSaturation] = new(ParameterKind.BaseEmitterSaturation, "UbeNas", "Напряжение насыщения база-эмиттер", "В", BoundDirection.AtMost, ConditionSpecs.ExactlyOneCurrent),
+            [ParameterKind.CollectorCutoffCurrent] = new(ParameterKind.CollectorCutoffCurrent, "Ikbo", "Обратный ток коллектора", "мкА", BoundDirection.AtMost, ConditionSpecs.OnlyUkb),
+            [ParameterKind.EmitterCutoffCurrent] = new(ParameterKind.EmitterCutoffCurrent, "Iebo", "Обратный ток эмиттера", "мкА", BoundDirection.AtMost, ConditionSpecs.OnlyUeb),
+            [ParameterKind.CollectorEmitterCutoffCurrent] = new(ParameterKind.CollectorEmitterCutoffCurrent, "Ikeo", "Обратный ток коллектор-эмиттер", "мкА", BoundDirection.AtMost, ConditionSpecs.OnlyUke),
+            [ParameterKind.CollectorEmitterCutoffCurrentRbe] = new(ParameterKind.CollectorEmitterCutoffCurrentRbe, "Ikep", "Обратный ток коллектор-эмиттер при заданном Rбэ", "мкА", BoundDirection.AtMost, ConditionSpecs.UkeAndRbe),
+            [ParameterKind.InputResistance] = new(ParameterKind.InputResistance, "h11", "Входное сопротивление", "Ом", BoundDirection.AtLeast, ConditionSpecs.UkeAndIk),
+            [ParameterKind.CollectorJunctionCapacitance] = new(ParameterKind.CollectorJunctionCapacitance, "Ck", "Ёмкость коллекторного перехода", "пФ", BoundDirection.AtMost, ConditionSpecs.OnlyUkb),
+            [ParameterKind.EmitterJunctionCapacitance] = new(ParameterKind.EmitterJunctionCapacitance, "Ce", "Ёмкость эмиттерного перехода", "пФ", BoundDirection.AtMost, ConditionSpecs.OnlyUeb),
+            [ParameterKind.FeedbackTimeConstant] = new(ParameterKind.FeedbackTimeConstant, "Tauk", "Постоянная времени цепи обратной связи", "пс", BoundDirection.AtMost, ConditionSpecs.UkbAndIe),
+            [ParameterKind.SwitchOnTime] = new(ParameterKind.SwitchOnTime, "Ton", "Время включения", "нс", BoundDirection.AtMost, ConditionSpecs.IkAndIb),
+            [ParameterKind.SwitchOffTime] = new(ParameterKind.SwitchOffTime, "Toff", "Время выключения (рассасывания)", "нс", BoundDirection.AtMost, ConditionSpecs.IkAndIb),
+            [ParameterKind.NoiseFigure] = new(ParameterKind.NoiseFigure, "KShum", "Коэффициент шума", "дБ", BoundDirection.AtMost, ConditionSpecs.PairPlusFrequency),
+            [ParameterKind.OutputPower] = new(ParameterKind.OutputPower, "PVyh", "Выходная мощность", "Вт", BoundDirection.AtLeast, ConditionSpecs.FrequencyPlusOptionalUkeIk),
+            [ParameterKind.PowerGain] = new(ParameterKind.PowerGain, "KUr", "Коэффициент усиления по мощности", "дБ", BoundDirection.AtLeast, ConditionSpecs.FrequencyPlusOptionalUkeIk),
+            [ParameterKind.CollectorEfficiency] = new(ParameterKind.CollectorEfficiency, "Kpd", "КПД коллектора", "%", BoundDirection.AtLeast, ConditionSpecs.FrequencyPlusOptionalUkeIk, ValueCeiling: 100),
         };
 
     public static readonly IReadOnlyDictionary<string, ParameterKind> ByCode =
         All.Values.ToDictionary(info => info.Code, info => info.Kind);
 
-    /// <summary>Параметры, у которых условие «частота» обязательно.</summary>
-    public static readonly IReadOnlyCollection<ParameterKind> FrequencyKinds = new HashSet<ParameterKind>
-    {
-        ParameterKind.NoiseFigure,
-        ParameterKind.OutputPower,
-        ParameterKind.PowerGain,
-        ParameterKind.CollectorEfficiency,
-    };
-
-    public static string FrequencyCodesList { get; } = string.Join(", ",
-        FrequencyKinds.Select(kind => All[kind].Code).OrderBy(code => code, StringComparer.Ordinal));
-
     public static ParameterInfo Info(ParameterKind kind) => All[kind];
 
     public static bool TryGetByCode(string code, out ParameterKind kind) => ByCode.TryGetValue(code, out kind!);
-
-    public static bool IsFrequencyKind(ParameterKind kind) => FrequencyKinds.Contains(kind);
 
     public static string CodesList => string.Join(", ", All.Values.OrderBy(info => info.Kind).Select(info => info.Code));
 }
@@ -146,105 +119,27 @@ public static class ElectricalParameterValidator
         if (parameter.ValueMin is double min && min <= 0) errors.Add($"«{info.Code}»: значение должно быть положительным");
         if (parameter.ValueMax is double max && max <= 0) errors.Add($"«{info.Code}»: значение должно быть положительным");
         if (parameter.ValueMin is double a && parameter.ValueMax is double b && a > b) errors.Add($"«{info.Code}»: нижняя граница больше верхней");
-        if (parameter.Kind == ParameterKind.CollectorEfficiency && parameter.ValueMin is double kpd && kpd > 100)
-            errors.Add($"«{info.Code}»: КПД не может превышать 100%");
-
-        switch (info.Rule)
+        if (info.ValueCeiling is double ceiling && parameter.ValueMin is double value && value > ceiling)
         {
-            case ConditionRule.PairUkeIkOrUkbIe:
-                bool pairOk = (parameter.Uke.HasValue && parameter.Ik.HasValue && !parameter.Ukb.HasValue && !parameter.Ueb.HasValue && !parameter.Ie.HasValue)
-                           || (parameter.Ukb.HasValue && parameter.Ie.HasValue && !parameter.Uke.HasValue && !parameter.Ueb.HasValue && !parameter.Ik.HasValue);
-                if (!pairOk)
-                    errors.Add($"«{info.Code}»: условия — ровно пара Uкэ + Iк (Uke, Ik, включение с ОЭ) либо Uкб + Iэ (Ukb, Ie, ОБ); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.ExactlyOneCurrent:
-                int currents = (parameter.Ik.HasValue ? 1 : 0) + (parameter.Ie.HasValue ? 1 : 0);
-                bool hasVoltage = parameter.Uke.HasValue || parameter.Ukb.HasValue || parameter.Ueb.HasValue;
-                if (currents != 1 || hasVoltage)
-                    errors.Add($"«{info.Code}»: условие — только ток коллектора (Ik) или только ток эмиттера (Ie); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.OnlyUkb:
-                if (!parameter.Ukb.HasValue || parameter.Uke.HasValue || parameter.Ueb.HasValue || parameter.Ik.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условие — только напряжение коллектор-база (Ukb); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.OnlyUeb:
-                if (!parameter.Ueb.HasValue || parameter.Uke.HasValue || parameter.Ukb.HasValue || parameter.Ik.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условие — только напряжение эмиттер-база (Ueb); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.UkeAndIk:
-                if (!parameter.Uke.HasValue || !parameter.Ik.HasValue || parameter.Ukb.HasValue || parameter.Ueb.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условия — Uкэ (Uke) и Iк (Ik); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.UkbAndIe:
-                if (!parameter.Ukb.HasValue || !parameter.Ie.HasValue || parameter.Uke.HasValue || parameter.Ueb.HasValue || parameter.Ik.HasValue)
-                    errors.Add($"«{info.Code}»: условия — Uкб (Ukb) и Iэ (Ie), схема с общей базой; задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.OnlyUke:
-                if (!parameter.Uke.HasValue || parameter.Ukb.HasValue || parameter.Ueb.HasValue || parameter.Ik.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условие — только напряжение коллектор-эмиттер (Uke); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.UkeAndRbe:
-                if (!parameter.Uke.HasValue || !parameter.Rbe.HasValue || parameter.Ukb.HasValue || parameter.Ueb.HasValue || parameter.Ik.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условия — Uкэ (Uke) и сопротивление в цепи база-эмиттер (Rbe, Ом); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.IkAndIb:
-                if (!parameter.Ik.HasValue || !parameter.Ib.HasValue || parameter.Uke.HasValue || parameter.Ukb.HasValue || parameter.Ueb.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: условия — Iк (Ik) и Iб (Ib); задано: {Describe(parameter)}");
-                break;
-            case ConditionRule.PairPlusFrequency:
-                bool noisePairOk = (parameter.Uke.HasValue && parameter.Ik.HasValue && !parameter.Ukb.HasValue && !parameter.Ueb.HasValue && !parameter.Ie.HasValue)
-                                || (parameter.Ukb.HasValue && parameter.Ie.HasValue && !parameter.Uke.HasValue && !parameter.Ueb.HasValue && !parameter.Ik.HasValue);
-                if (!noisePairOk)
-                    errors.Add($"«{info.Code}»: условия — пара Uкэ + Iк (Uke, Ik) либо Uкб + Iэ (Ukb, Ie) и обязательная частота (freq, МГц); задано: {Describe(parameter)}");
-                if (parameter.Freq is null)
-                    errors.Add($"«{info.Code}»: обязательна частота измерения (freq, МГц)");
-                break;
-            case ConditionRule.FrequencyPlusOptionalUkeIk:
-                if (parameter.Freq is null)
-                    errors.Add($"«{info.Code}»: обязательна частота (freq, МГц)");
-                bool bothOrNone = (parameter.Uke.HasValue && parameter.Ik.HasValue) || (!parameter.Uke.HasValue && !parameter.Ik.HasValue);
-                if (!bothOrNone)
-                    errors.Add($"«{info.Code}»: Uкэ (Uke) и Iк (Ik) задаются только вместе; задано: {Describe(parameter)}");
-                if (parameter.Ukb.HasValue || parameter.Ueb.HasValue || parameter.Ie.HasValue)
-                    errors.Add($"«{info.Code}»: допускаются только Uke + Ik (вместе) и частота; задано: {Describe(parameter)}");
-                break;
+            string unit = info.Unit is null ? "" : " " + info.Unit;
+            errors.Add($"«{info.Code}»: {info.DisplayName} не может превышать {ParameterText.Fmt(ceiling)}{unit}");
         }
 
-        if (parameter.Freq.HasValue && !ElectricalParameterCatalog.IsFrequencyKind(parameter.Kind))
-            errors.Add($"«{info.Code}»: частота (freq) допускается только у частотных параметров ({ElectricalParameterCatalog.FrequencyCodesList})");
-        if (parameter.Rg.HasValue && parameter.Kind != ParameterKind.NoiseFigure)
-            errors.Add($"«{info.Code}»: сопротивление генератора (Rg) допускается только у KShum");
-        if (parameter.Rbe.HasValue && parameter.Kind != ParameterKind.CollectorEmitterCutoffCurrentRbe)
-            errors.Add($"«{info.Code}»: сопротивление Rбэ (Rbe) допускается только у Ikep");
-        if (parameter.Ib.HasValue && parameter.Kind is not (ParameterKind.SwitchOnTime or ParameterKind.SwitchOffTime))
-            errors.Add($"«{info.Code}»: ток базы (Ib) как условие допускается только у Ton/Toff");
+        if (!info.Conditions.IsSatisfiedBy(parameter))
+            errors.Add($"«{info.Code}»: условия — {info.Conditions.Describe()}; задано: {Describe(parameter)}");
 
-        if (IsNonPositive(parameter.Uke)) errors.Add($"«{info.Code}»: условие Uкэ должно быть положительным");
-        if (IsNonPositive(parameter.Ukb)) errors.Add($"«{info.Code}»: условие Uкб должно быть положительным");
-        if (IsNonPositive(parameter.Ueb)) errors.Add($"«{info.Code}»: условие Uэб должно быть положительным");
-        if (IsNonPositive(parameter.Ik)) errors.Add($"«{info.Code}»: условие Iк должно быть положительным");
-        if (IsNonPositive(parameter.Ie)) errors.Add($"«{info.Code}»: условие Iэ должно быть положительным");
-        if (IsNonPositive(parameter.Ib)) errors.Add($"«{info.Code}»: условие Iб должно быть положительным");
-        if (IsNonPositive(parameter.Freq)) errors.Add($"«{info.Code}»: частота должна быть положительной");
-        if (IsNonPositive(parameter.Rg)) errors.Add($"«{info.Code}»: сопротивление генератора должно быть положительным");
-        if (IsNonPositive(parameter.Rbe)) errors.Add($"«{info.Code}»: сопротивление Rбэ должно быть положительным");
+        foreach (ConditionKey key in ConditionKeys.All)
+            if (ConditionKeys.ValueOf(parameter, key) is <= 0)
+                errors.Add($"«{info.Code}»: {ConditionKeys.NonPositiveMessage(key)}");
         return errors;
     }
 
-    private static bool IsNonPositive(double? value) => value is <= 0;
-
-    private static string Describe(ElectricalParameter p)
+    private static string Describe(ElectricalParameter parameter)
     {
         var parts = new List<string>();
-        if (p.Uke.HasValue) parts.Add("Uкэ");
-        if (p.Ukb.HasValue) parts.Add("Uкб");
-        if (p.Ueb.HasValue) parts.Add("Uэб");
-        if (p.Ik.HasValue) parts.Add("Iк");
-        if (p.Ie.HasValue) parts.Add("Iэ");
-        if (p.Ib.HasValue) parts.Add("Iб");
-        if (p.Freq.HasValue) parts.Add("f");
-        if (p.Rg.HasValue) parts.Add("Rг");
-        if (p.Rbe.HasValue) parts.Add("Rбэ");
+        foreach (ConditionKey key in ConditionKeys.All)
+            if (ConditionKeys.ValueOf(parameter, key).HasValue)
+                parts.Add(ConditionKeys.Label(key));
         return parts.Count == 0 ? "ничего" : string.Join(", ", parts);
     }
 }
