@@ -101,6 +101,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             }
         }
 
+        DeleteOrphanManufacturers(connection, transaction);
         transaction.Commit();
         return outcome;
     }
@@ -134,6 +135,10 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             command.Transaction = transaction;
             command.CommandText = "DELETE FROM transistors WHERE " + BuildExactMatch(command, transistor);
             removed = command.ExecuteNonQuery();
+        }
+        if (removed > 0)
+        {
+            DeleteOrphanManufacturers(connection, transaction);
         }
         transaction.Commit();
         return removed > 0;
@@ -583,6 +588,22 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             linkName.Value = name;
             link.ExecuteNonQuery();
         }
+    }
+
+    /// <summary>
+    /// Чистка бесхозных имён производителей: связи transistor_manufacturers удаляются
+    /// при замене списка производителей и каскадом при delete транзистора, а сами строки
+    /// manufacturers FK-каскад не трогает — без этой чистки они копились бы бесконечно.
+    /// Выполняется в конце Save/Delete внутри их транзакции. NOT IN переносим
+    /// (SQLite/PostgreSQL/MariaDB); ManufacturerId NOT NULL — ловушки NULL в подзапросе нет.
+    /// </summary>
+    private static void DeleteOrphanManufacturers(DbConnection connection, DbTransaction transaction)
+    {
+        using DbCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            "DELETE FROM manufacturers WHERE Id NOT IN (SELECT ManufacturerId FROM transistor_manufacturers)";
+        command.ExecuteNonQuery();
     }
 
     private static void SetRatingsCore(DbConnection connection, DbTransaction transaction, int transistorId, MaximumRatings ratings)
