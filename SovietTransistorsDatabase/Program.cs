@@ -279,6 +279,10 @@ internal static class Program
 
         PrintTransistor(transistor);
         TransistorAttributes? attributes = db.GetAttributes(id.Value);
+        IReadOnlyList<string> manufacturers = db.GetManufacturers(id.Value);
+        IReadOnlyList<ElectricalParameter> parameters = db.GetParameters(id.Value);
+        MaximumRatings? ratings = db.GetRatings(id.Value);
+
         if (attributes is not null)
         {
             Console.WriteLine();
@@ -304,18 +308,13 @@ internal static class Program
             if (attributes.Notes is string notes) Console.WriteLine($"  Примечание: {notes}");
         }
 
-        IReadOnlyList<string> manufacturers = db.GetManufacturers(id.Value);
         if (manufacturers.Count > 0)
         {
-            if (attributes is null)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Атрибуты:");
-            }
-            Console.WriteLine($"  Производители: {string.Join(", ", manufacturers)}");
+            Console.WriteLine();
+            Console.WriteLine("Производители:");
+            Console.WriteLine($"  {string.Join(", ", manufacturers)}");
         }
 
-        IReadOnlyList<ElectricalParameter> parameters = db.GetParameters(id.Value);
         if (parameters.Count > 0)
         {
             Console.WriteLine();
@@ -327,7 +326,6 @@ internal static class Program
             }
         }
 
-        MaximumRatings? ratings = db.GetRatings(id.Value);
         if (ratings is not null)
         {
             Console.WriteLine();
@@ -620,7 +618,7 @@ internal static class Program
               add <обозначение> [<обозначение>...]   добавить транзисторы по обозначению (через парсер)
               parse <обозначение>...                 разобрать обозначение без обращения к базе
               list [фильтры]                       вывести обозначения из базы
-              info <обозначение>                   карточка: атрибуты, параметры, предельные данные
+              info <обозначение>                   карточка: атрибуты, производители, параметры, предельные данные
               find <обозначение>                   найти запись по точному обозначению (при отсутствии —
                                                    подсказка равнозначной по материалу: Г/1, К/2, А/3, И/4)
               delete <обозначение>...                удалить записи (каскадно с параметрами и предельными)
