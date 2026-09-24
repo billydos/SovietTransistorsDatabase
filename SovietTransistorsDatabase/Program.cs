@@ -133,16 +133,16 @@ internal static class Program
         using ITransistorDatabase db = OpenDatabase(dbPath);
         foreach (Transistor transistor in valid)
         {
-            switch (db.Add(transistor))
+            // Save(transistor, null) без секций возвращает только Added или Skipped
+            if (db.Save(transistor, null) == UpsertOutcome.Added)
             {
-                case InsertOutcome.Added:
-                    added++;
-                    Console.WriteLine($"Добавлено: {transistor.Name}");
-                    break;
-                case InsertOutcome.DuplicateExists:
-                    duplicates++;
-                    Console.WriteLine($"Пропущено (уже есть): {transistor.Name}");
-                    break;
+                added++;
+                Console.WriteLine($"Добавлено: {transistor.Name}");
+            }
+            else
+            {
+                duplicates++;
+                Console.WriteLine($"Пропущено (уже есть): {transistor.Name}");
             }
         }
         Console.WriteLine($"Итого: добавлено {added}, пропущено {duplicates}, ошибок разбора {failures}");
@@ -192,22 +192,26 @@ internal static class Program
         using ITransistorDatabase db = OpenDatabase(dbPath);
         foreach (TransistorEntryData entry in parsed.Entries)
         {
-            TransistorDetails? details = entry.Attributes is null && entry.Manufacturers is null && entry.Parameters is null && entry.Ratings is null
-                ? null
-                : new TransistorDetails { Attributes = entry.Attributes, Manufacturers = entry.Manufacturers, Parameters = entry.Parameters, Ratings = entry.Ratings };
+            TransistorDetails details = new()
+            {
+                Attributes = entry.Attributes,
+                Manufacturers = entry.Manufacturers,
+                Parameters = entry.Parameters,
+                Ratings = entry.Ratings,
+            };
             switch (db.Save(entry.Transistor, details))
             {
                 case UpsertOutcome.Added:
                     added++;
                     Console.WriteLine($"Добавлено: {entry.Transistor.Name}{DescribeSections(entry)}");
                     break;
-                case UpsertOutcome.UpdatedExisting when details is null:
-                    skipped++;
-                    Console.WriteLine($"Пропущено (уже есть): {entry.Transistor.Name}");
-                    break;
                 case UpsertOutcome.UpdatedExisting:
                     updated++;
                     Console.WriteLine($"Обновлено: {entry.Transistor.Name}{DescribeSections(entry)}");
+                    break;
+                case UpsertOutcome.Skipped:
+                    skipped++;
+                    Console.WriteLine($"Пропущено (уже есть): {entry.Transistor.Name}");
                     break;
             }
         }

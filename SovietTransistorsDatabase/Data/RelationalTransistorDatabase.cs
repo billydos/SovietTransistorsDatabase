@@ -70,18 +70,15 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         command.ExecuteNonQuery();
     }
 
-    public InsertOutcome Add(Transistor transistor)
-    {
-        ValidateTransistor(transistor);
-        return InsertTransistorIfAbsent(Connection, transaction: null, transistor)
-            ? InsertOutcome.Added
-            : InsertOutcome.DuplicateExists;
-    }
-
     public UpsertOutcome Save(Transistor transistor, TransistorDetails? details)
     {
         ValidateTransistor(transistor);
         ValidateDetails(transistor, details);
+
+        // «секций нет» ⟺ details null либо все секции null: запись без секций либо
+        // вставляется, либо пропускается — id и чистка сирот в этих путях не нужны.
+        bool hasSections = details?.Attributes is not null || details?.Manufacturers is not null
+            || details?.Parameters is not null || details?.Ratings is not null;
 
         DbConnection connection = Connection;
         using DbTransaction transaction = connection.BeginTransaction();
@@ -89,8 +86,13 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         UpsertOutcome outcome;
         if (InsertTransistorIfAbsent(connection, transaction, transistor))
         {
-            id = GetLastInsertId(connection, transaction);
             outcome = UpsertOutcome.Added;
+            id = hasSections ? GetLastInsertId(connection, transaction) : 0;
+        }
+        else if (!hasSections)
+        {
+            outcome = UpsertOutcome.Skipped;
+            id = 0;
         }
         else
         {
@@ -128,7 +130,11 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             }
         }
 
-        DeleteOrphanManufacturers(connection, transaction);
+        if (hasSections)
+        {
+            // применялись секции — могла отвязаться ссылка производителя
+            DeleteOrphanManufacturers(connection, transaction);
+        }
         transaction.Commit();
         return outcome;
     }

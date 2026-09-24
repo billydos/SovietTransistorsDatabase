@@ -2,16 +2,15 @@ using SovietTransistorsDatabase.Domain;
 
 namespace SovietTransistorsDatabase.Data;
 
-public enum InsertOutcome
-{
-    Added,
-    DuplicateExists,
-}
-
+/// <summary>
+/// Исход upsert: Added — вставлена новая запись; UpdatedExisting — запись существовала,
+/// применены заданные секции details; Skipped — запись существует, применять было нечего.
+/// </summary>
 public enum UpsertOutcome
 {
     Added,
     UpdatedExisting,
+    Skipped,
 }
 
 /// <summary>Данные транзистора, заполняемые при импорте: null означает «раздел не задан — не менять».</summary>
@@ -40,7 +39,6 @@ public sealed record TransistorQuery
 public interface ITransistorDatabase : IDisposable
 {
     void EnsureCreated();
-    InsertOutcome Add(Transistor transistor);
     UpsertOutcome Save(Transistor transistor, TransistorDetails? details);
     int? FindId(Transistor transistor);
     IReadOnlyList<Transistor> FindMaterialEquivalents(Transistor transistor);
