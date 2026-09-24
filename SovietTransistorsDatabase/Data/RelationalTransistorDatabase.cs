@@ -19,8 +19,35 @@ namespace SovietTransistorsDatabase.Data;
 /// </summary>
 public abstract class RelationalTransistorDatabase : ITransistorDatabase
 {
-    private const string TransistorColumns =
-        "Id, Material, Subclass, Assembly, Feature, DevNumber, Letters, Modification, ChipVariant";
+    // Центральные спецификации чтения: из одного массива собирается и текст SELECT
+    // (SelectFrom), и разрешение ординалов по именам (RowReader) — порядок колонок в
+    // запросе не влияет на чтение, а рассинхронизация SELECT и материализации невозможна.
+    private static readonly string[] TransistorColumns =
+        ["Material", "Subclass", "Assembly", "Feature", "DevNumber", "Letters", "Modification", "ChipVariant"];
+
+    private static readonly string[] AttributeColumns =
+    [
+        "Structure", "Technology", "Package", "PackageMaterial", "ColorMarking", "Pinout",
+        "EsdSensitive", "MilitaryGrade", "RadiationHardened", "Tu", "Notes",
+        "YearFrom", "YearTo", "MassMax", "DatasheetUrl"
+    ];
+
+    private static readonly string[] RatingColumns =
+    [
+        "UkeMax", "UkbMax", "UbeMax", "UkeoMax", "IkMax", "IbMax", "PkMax",
+        "IkPulseMax", "PkPulseMax", "PulseDuration",
+        "TempMin", "TempMax", "TempJunctionMax", "Rth"
+    ];
+
+    // условия измерения — из того же источника, из которого собирается DDL electrical_parameters
+    private static readonly string[] ConditionColumns =
+        [.. ConditionKeys.All.Select(ConditionKeys.Name), "Temp"];
+
+    private static readonly string[] ParameterColumns =
+        ["Parameter", "ValueMin", "ValueMax", .. ConditionColumns];
+
+    private static string SelectFrom(string table, IReadOnlyList<string> columns) =>
+        "SELECT " + string.Join(", ", columns) + " FROM " + table;
 
     private DbConnection? _connection;
 
@@ -114,13 +141,14 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     public IReadOnlyList<Transistor> FindMaterialEquivalents(Transistor transistor)
     {
         using DbCommand command = Connection.CreateCommand();
-        command.CommandText = "SELECT " + TransistorColumns + " FROM transistors WHERE "
+        command.CommandText = SelectFrom("transistors", TransistorColumns) + " WHERE "
             + BuildMaterialCounterpartMatch(command, transistor);
         using DbDataReader reader = command.ExecuteReader();
+        var row = new RowReader(reader, TransistorColumns);
         var rows = new List<Transistor>();
         while (reader.Read())
         {
-            rows.Add(ReadTransistor(reader));
+            rows.Add(ReadTransistor(row));
         }
         return rows;
     }
@@ -156,7 +184,7 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         using DbCommand command = Connection.CreateCommand();
 
         var sql = new StringBuilder();
-        sql.Append("SELECT ").Append(TransistorColumns).Append(" FROM transistors");
+        sql.Append(SelectFrom("transistors", TransistorColumns));
 
         var conditions = new List<string>();
         if (query.Material is SemiconductorMaterial material)
@@ -216,10 +244,11 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
 
         command.CommandText = sql.ToString();
         using DbDataReader reader = command.ExecuteReader();
+        var row = new RowReader(reader, TransistorColumns);
         var rows = new List<Transistor>();
         while (reader.Read())
         {
-            rows.Add(ReadTransistor(reader));
+            rows.Add(ReadTransistor(row));
         }
         return rows;
     }
@@ -227,36 +256,31 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     public TransistorAttributes? GetAttributes(int transistorId)
     {
         using DbCommand command = Connection.CreateCommand();
-        command.CommandText = """
-            SELECT Structure, Technology, Package, PackageMaterial, ColorMarking, Pinout,
-                   EsdSensitive, MilitaryGrade, RadiationHardened, Tu, Notes,
-                   YearFrom, YearTo, MassMax, DatasheetUrl
-            FROM transistor_attributes
-            WHERE TransistorId = @id
-            """;
+        command.CommandText = SelectFrom("transistor_attributes", AttributeColumns) + " WHERE TransistorId = @id";
         AddParameter(command, "@id", transistorId);
         using DbDataReader reader = command.ExecuteReader();
         if (!reader.Read())
         {
             return null;
         }
+        var row = new RowReader(reader, AttributeColumns);
         return new TransistorAttributes
         {
-            Structure = GetStringOrNull(reader, 0),
-            Technology = GetStringOrNull(reader, 1),
-            Package = GetStringOrNull(reader, 2),
-            PackageMaterial = GetStringOrNull(reader, 3),
-            ColorMarking = GetStringOrNull(reader, 4),
-            Pinout = GetStringOrNull(reader, 5),
-            EsdSensitive = GetBoolOrNull(reader, 6),
-            MilitaryGrade = GetBoolOrNull(reader, 7),
-            RadiationHardened = GetBoolOrNull(reader, 8),
-            Tu = GetStringOrNull(reader, 9),
-            Notes = GetStringOrNull(reader, 10),
-            YearFrom = reader.IsDBNull(11) ? null : reader.GetInt32(11),
-            YearTo = reader.IsDBNull(12) ? null : reader.GetInt32(12),
-            MassMax = GetNullableDouble(reader, 13),
-            DatasheetUrl = GetStringOrNull(reader, 14),
+            Structure = row.GetStringOrNull("Structure"),
+            Technology = row.GetStringOrNull("Technology"),
+            Package = row.GetStringOrNull("Package"),
+            PackageMaterial = row.GetStringOrNull("PackageMaterial"),
+            ColorMarking = row.GetStringOrNull("ColorMarking"),
+            Pinout = row.GetStringOrNull("Pinout"),
+            EsdSensitive = row.GetBoolOrNull("EsdSensitive"),
+            MilitaryGrade = row.GetBoolOrNull("MilitaryGrade"),
+            RadiationHardened = row.GetBoolOrNull("RadiationHardened"),
+            Tu = row.GetStringOrNull("Tu"),
+            Notes = row.GetStringOrNull("Notes"),
+            YearFrom = row.GetInt32OrNull("YearFrom"),
+            YearTo = row.GetInt32OrNull("YearTo"),
+            MassMax = row.GetDoubleOrNull("MassMax"),
+            DatasheetUrl = row.GetStringOrNull("DatasheetUrl"),
         };
     }
 
@@ -283,18 +307,15 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     public IReadOnlyList<ElectricalParameter> GetParameters(int transistorId)
     {
         using DbCommand command = Connection.CreateCommand();
-        command.CommandText = """
-            SELECT Parameter, ValueMin, ValueMax, Uke, Ukb, Ueb, Ik, Ie, Ib, Freq, Rg, Rbe, Temp
-            FROM electrical_parameters
-            WHERE TransistorId = @id
-            ORDER BY Id
-            """;
+        command.CommandText = SelectFrom("electrical_parameters", ParameterColumns)
+            + " WHERE TransistorId = @id ORDER BY Id";
         AddParameter(command, "@id", transistorId);
         using DbDataReader reader = command.ExecuteReader();
+        var row = new RowReader(reader, ParameterColumns);
         var rows = new List<ElectricalParameter>();
         while (reader.Read())
         {
-            string code = reader.GetString(0);
+            string code = row.GetString("Parameter");
             if (!ElectricalParameterCatalog.TryGetByCode(code, out ParameterKind kind))
             {
                 throw new InvalidOperationException($"в базе найден неизвестный код параметра «{code}»");
@@ -302,18 +323,18 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
             rows.Add(new ElectricalParameter
             {
                 Kind = kind,
-                ValueMin = GetNullableDouble(reader, 1),
-                ValueMax = GetNullableDouble(reader, 2),
-                Uke = GetNullableDouble(reader, 3),
-                Ukb = GetNullableDouble(reader, 4),
-                Ueb = GetNullableDouble(reader, 5),
-                Ik = GetNullableDouble(reader, 6),
-                Ie = GetNullableDouble(reader, 7),
-                Ib = GetNullableDouble(reader, 8),
-                Freq = GetNullableDouble(reader, 9),
-                Rg = GetNullableDouble(reader, 10),
-                Rbe = GetNullableDouble(reader, 11),
-                Temp = GetNullableDouble(reader, 12),
+                ValueMin = row.GetDoubleOrNull("ValueMin"),
+                ValueMax = row.GetDoubleOrNull("ValueMax"),
+                Uke = row.GetDoubleOrNull("Uke"),
+                Ukb = row.GetDoubleOrNull("Ukb"),
+                Ueb = row.GetDoubleOrNull("Ueb"),
+                Ik = row.GetDoubleOrNull("Ik"),
+                Ie = row.GetDoubleOrNull("Ie"),
+                Ib = row.GetDoubleOrNull("Ib"),
+                Freq = row.GetDoubleOrNull("Freq"),
+                Rg = row.GetDoubleOrNull("Rg"),
+                Rbe = row.GetDoubleOrNull("Rbe"),
+                Temp = row.GetDoubleOrNull("Temp"),
             });
         }
         return rows;
@@ -322,35 +343,30 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
     public MaximumRatings? GetRatings(int transistorId)
     {
         using DbCommand command = Connection.CreateCommand();
-        command.CommandText = """
-            SELECT UkeMax, UkbMax, UbeMax, UkeoMax, IkMax, IbMax, PkMax,
-                   IkPulseMax, PkPulseMax, PulseDuration,
-                   TempMin, TempMax, TempJunctionMax, Rth
-            FROM maximum_ratings
-            WHERE TransistorId = @id
-            """;
+        command.CommandText = SelectFrom("maximum_ratings", RatingColumns) + " WHERE TransistorId = @id";
         AddParameter(command, "@id", transistorId);
         using DbDataReader reader = command.ExecuteReader();
         if (!reader.Read())
         {
             return null;
         }
+        var row = new RowReader(reader, RatingColumns);
         return new MaximumRatings
         {
-            UkeMax = GetNullableDouble(reader, 0),
-            UkbMax = GetNullableDouble(reader, 1),
-            UbeMax = GetNullableDouble(reader, 2),
-            UkeoMax = GetNullableDouble(reader, 3),
-            IkMax = GetNullableDouble(reader, 4),
-            IbMax = GetNullableDouble(reader, 5),
-            PkMax = GetNullableDouble(reader, 6),
-            IkPulseMax = GetNullableDouble(reader, 7),
-            PkPulseMax = GetNullableDouble(reader, 8),
-            PulseDuration = GetNullableDouble(reader, 9),
-            TempMin = GetNullableDouble(reader, 10),
-            TempMax = GetNullableDouble(reader, 11),
-            TempJunctionMax = GetNullableDouble(reader, 12),
-            Rth = GetNullableDouble(reader, 13),
+            UkeMax = row.GetDoubleOrNull("UkeMax"),
+            UkbMax = row.GetDoubleOrNull("UkbMax"),
+            UbeMax = row.GetDoubleOrNull("UbeMax"),
+            UkeoMax = row.GetDoubleOrNull("UkeoMax"),
+            IkMax = row.GetDoubleOrNull("IkMax"),
+            IbMax = row.GetDoubleOrNull("IbMax"),
+            PkMax = row.GetDoubleOrNull("PkMax"),
+            IkPulseMax = row.GetDoubleOrNull("IkPulseMax"),
+            PkPulseMax = row.GetDoubleOrNull("PkPulseMax"),
+            PulseDuration = row.GetDoubleOrNull("PulseDuration"),
+            TempMin = row.GetDoubleOrNull("TempMin"),
+            TempMax = row.GetDoubleOrNull("TempMax"),
+            TempJunctionMax = row.GetDoubleOrNull("TempJunctionMax"),
+            Rth = row.GetDoubleOrNull("Rth"),
         };
     }
 
@@ -708,26 +724,75 @@ public abstract class RelationalTransistorDatabase : ITransistorDatabase
         }
     }
 
-    private static Transistor ReadTransistor(DbDataReader reader) => new()
+    private static Transistor ReadTransistor(RowReader row) => new()
     {
-        Material = reader.GetString(1)[0],
-        Subclass = reader.GetString(2)[0],
-        IsAssembly = reader.GetInt32(3) != 0,
-        Feature = reader.GetInt32(4),
-        DevelopmentNumber = reader.GetInt32(5),
-        Letters = reader.GetString(6),
-        Modification = reader.IsDBNull(7) ? null : reader.GetInt32(7),
-        ChipVariant = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+        Material = row.GetChar("Material"),
+        Subclass = row.GetChar("Subclass"),
+        IsAssembly = row.GetBool("Assembly"),
+        Feature = row.GetInt32("Feature"),
+        DevelopmentNumber = row.GetInt32("DevNumber"),
+        Letters = row.GetString("Letters"),
+        Modification = row.GetInt32OrNull("Modification"),
+        ChipVariant = row.GetInt32OrNull("ChipVariant"),
     };
 
-    private static double? GetNullableDouble(DbDataReader reader, int ordinal) =>
-        reader.IsDBNull(ordinal) ? null : reader.GetDouble(ordinal);
+    /// <summary>
+    /// Чтение строки по именам колонок: ординалы один раз разрешаются из той же
+    /// спецификации колонок, из которой собран SELECT, поэтому порядок колонок в
+    /// запросе не влияет на результат, а опечатка в имени падает громко, а не
+    /// молча читает соседнюю колонку. Булевы читаются из INTEGER 0/1.
+    /// </summary>
+    private sealed class RowReader
+    {
+        private readonly DbDataReader _reader;
+        private readonly Dictionary<string, int> _ordinals;
 
-    private static string? GetStringOrNull(DbDataReader reader, int ordinal) =>
-        reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+        public RowReader(DbDataReader reader, IReadOnlyList<string> columns)
+        {
+            _reader = reader;
+            _ordinals = new Dictionary<string, int>(columns.Count, StringComparer.Ordinal);
+            foreach (string column in columns)
+            {
+                _ordinals[column] = reader.GetOrdinal(column);
+            }
+        }
 
-    private static bool? GetBoolOrNull(DbDataReader reader, int ordinal) =>
-        reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetInt32(ordinal), CultureInfo.InvariantCulture);
+        private int Ordinal(string column) => _ordinals.TryGetValue(column, out int ordinal)
+            ? ordinal
+            : throw new InvalidOperationException($"в SELECT нет колонки «{column}»");
+
+        public string GetString(string column) => _reader.GetString(Ordinal(column));
+
+        public char GetChar(string column) => _reader.GetString(Ordinal(column))[0];
+
+        public int GetInt32(string column) => _reader.GetInt32(Ordinal(column));
+
+        public bool GetBool(string column) => _reader.GetInt32(Ordinal(column)) != 0;
+
+        public string? GetStringOrNull(string column)
+        {
+            int ordinal = Ordinal(column);
+            return _reader.IsDBNull(ordinal) ? null : _reader.GetString(ordinal);
+        }
+
+        public int? GetInt32OrNull(string column)
+        {
+            int ordinal = Ordinal(column);
+            return _reader.IsDBNull(ordinal) ? null : _reader.GetInt32(ordinal);
+        }
+
+        public bool? GetBoolOrNull(string column)
+        {
+            int ordinal = Ordinal(column);
+            return _reader.IsDBNull(ordinal) ? null : _reader.GetInt32(ordinal) != 0;
+        }
+
+        public double? GetDoubleOrNull(string column)
+        {
+            int ordinal = Ordinal(column);
+            return _reader.IsDBNull(ordinal) ? null : _reader.GetDouble(ordinal);
+        }
+    }
 
     private static object Box(double? value) => value is double v ? v : DBNull.Value;
 
