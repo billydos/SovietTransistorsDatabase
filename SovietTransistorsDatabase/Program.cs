@@ -101,18 +101,10 @@ internal static class Program
             Console.Error.WriteLine("Укажите обозначение, например: parse КТ315Б");
             return 1;
         }
-        int failures = 0;
-        foreach (string name in names)
+        (List<Transistor> valid, int failures) = ParseNames(names);
+        foreach (Transistor transistor in valid)
         {
-            if (TransistorNameParser.TryParse(name, out var transistor, out string error))
-            {
-                PrintTransistor(transistor!);
-            }
-            else
-            {
-                failures++;
-                Console.Error.WriteLine($"{name}: {error}");
-            }
+            PrintTransistor(transistor);
         }
         return failures == 0 ? 0 : 1;
     }
@@ -125,20 +117,7 @@ internal static class Program
             return 1;
         }
 
-        var valid = new List<Transistor>();
-        int failures = 0;
-        foreach (string name in names)
-        {
-            if (TransistorNameParser.TryParse(name, out var transistor, out string error))
-            {
-                valid.Add(transistor!);
-            }
-            else
-            {
-                failures++;
-                Console.Error.WriteLine($"{name}: {error}");
-            }
-        }
+        (List<Transistor> valid, int failures) = ParseNames(names);
 
         if (dryRun)
         {
@@ -401,20 +380,7 @@ internal static class Program
             return 1;
         }
 
-        var valid = new List<Transistor>();
-        int failures = 0;
-        foreach (string name in names)
-        {
-            if (TransistorNameParser.TryParse(name, out var transistor, out string error))
-            {
-                valid.Add(transistor!);
-            }
-            else
-            {
-                failures++;
-                Console.Error.WriteLine($"{name}: {error}");
-            }
-        }
+        (List<Transistor> valid, int failures) = ParseNames(names);
 
         if (dryRun)
         {
@@ -450,6 +416,26 @@ internal static class Program
         using ITransistorDatabase db = OpenExistingDatabase(dbPath);
         Console.WriteLine(db.CountAll());
         return 0;
+    }
+
+    /// <summary>Разбирает список обозначений: корректные возвращает, для некорректных печатает ошибку и считает их.</summary>
+    private static (List<Transistor> Valid, int Failures) ParseNames(List<string> names)
+    {
+        var valid = new List<Transistor>();
+        int failures = 0;
+        foreach (string name in names)
+        {
+            if (TransistorNameParser.TryParse(name, out var transistor, out string error))
+            {
+                valid.Add(transistor!);
+            }
+            else
+            {
+                failures++;
+                Console.Error.WriteLine($"{name}: {error}");
+            }
+        }
+        return (valid, failures);
     }
 
     /// <summary>База для команд записи (init/add/import): создаётся при необходимости, DDL выполняется один раз за запуск.</summary>
