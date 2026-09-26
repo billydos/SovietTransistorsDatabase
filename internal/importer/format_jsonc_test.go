@@ -70,3 +70,49 @@ func TestParseJsoncText_SyntaxErrorMessage(t *testing.T) {
 		t.Error("ожидалась *domain.UserError")
 	}
 }
+
+// Повторяющиеся ключи — ошибка разбора файла (как в yaml): первый ключ
+// не должен молча отбрасывать второй. Номер строки соответствует исходному
+// файлу — Standardize заменяет комментарии пробелами, сохраняя переводы строк.
+func TestParseJsoncText_DuplicateKeys_Rejected(t *testing.T) {
+	cases := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "повтор ключа transistors в корне",
+			source: "{\n\t\"transistors\": [\"МП39\"],\n\t\"transistors\": [\"КТ315Б\"]\n}\n",
+			want:   "файл не является корректным JSONC: повторяющийся ключ «transistors» (строка 3)",
+		},
+		{
+			name:   "повтор name в записи",
+			source: "{\n\t\"transistors\": [\n\t\t{\"name\": \"МП39\", \"name\": \"КТ315Б\"}\n\t]\n}\n",
+			want:   "файл не является корректным JSONC: повторяющийся ключ «name» (строка 3)",
+		},
+		{
+			name:   "повтор поля во вложенной секции",
+			source: "{\n\t\"transistors\": [\n\t\t{\n\t\t\t\"name\": \"КТ315Б\",\n\t\t\t\"ratings\": {\"IkMax\": 50, \"IkMax\": 60}\n\t\t}\n\t]\n}\n",
+			want:   "файл не является корректным JSONC: повторяющийся ключ «IkMax» (строка 5)",
+		},
+		{
+			name:   "комментарий перед дубликатом не смещает номер строки",
+			source: "{\n\t\"transistors\": [],\n\t// комментарий\n\t\"transistors\": []\n}\n",
+			want:   "файл не является корректным JSONC: повторяющийся ключ «transistors» (строка 4)",
+		},
+	}
+	for _, testCase := range cases {
+		_, err := ParseJsoncText(testCase.source)
+		if err == nil {
+			t.Errorf("%s: ожидалась ошибка повторяющегося ключа", testCase.name)
+			continue
+		}
+		if err.Error() != testCase.want {
+			t.Errorf("%s: текст ошибки:\n%q\nожидалось:\n%q", testCase.name, err.Error(), testCase.want)
+		}
+		var userError *domain.UserError
+		if !errors.As(err, &userError) {
+			t.Errorf("%s: ожидалась *domain.UserError", testCase.name)
+		}
+	}
+}

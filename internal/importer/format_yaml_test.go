@@ -127,4 +127,10 @@ func TestParseYamlText_DuplicateKeys_Rejected(t *testing.T) {
 	if _, err := ParseYamlText("transistors: []\ntransistors: []\n"); err == nil {
 		t.Error("ожидалась ошибка повторяющегося ключа")
 	}
+	if _, err := ParseYamlText("transistors:\n  - name: МП39\n    name: КТ315Б\n"); err == nil {
+		t.Error("ожидалась ошибка повторяющегося ключа в записи")
+	}
+	if _, err := ParseYamlText("transistors:\n  - name: КТ315Б\n    ratings: {IkMax: 50, IkMax: 60}\n"); err == nil {
+		t.Error("ожидалась ошибка повторяющегося ключа во вложенной секции")
+	}
 }
