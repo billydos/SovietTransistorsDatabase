@@ -1,8 +1,26 @@
 package importer
 
 import (
+	"errors"
+	"strings"
 	"testing"
+
+	"soviettransistors/internal/domain"
 )
+
+func TestParseYamlText_SyntaxErrorMessage(t *testing.T) {
+	_, err := ParseYamlText("transistors: [\n")
+	if err == nil {
+		t.Fatal("ожидалась ошибка синтаксиса")
+	}
+	if !strings.Contains(err.Error(), "файл не является корректным YAML: ") {
+		t.Errorf("текст ошибки = %q", err.Error())
+	}
+	var userError *domain.UserError
+	if !errors.As(err, &userError) {
+		t.Error("ожидалась *domain.UserError")
+	}
+}
 
 func TestParseYamlText_RootProblems(t *testing.T) {
 	if _, err := ParseYamlText(""); err == nil {

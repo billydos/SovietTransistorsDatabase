@@ -5,65 +5,47 @@ import (
 	"testing"
 )
 
-func TestParseJsonc_CommentsAndTrailingCommas(t *testing.T) {
-	source := `{
-		// строкный комментарий
-		"a": "значение // не комментарий", /* блочный
-		комментарий */
-		"b": [1, 2, 3,],
-		"c": {"d": "e",},
-	}`
-	parsed, err := parseJsonc([]byte(source))
-	if err != nil {
-		t.Fatalf("разбор не удался: %v", err)
-	}
-	if parsed.kind != kindObject {
-		t.Fatalf("корень не объект: %v", parsed.kind)
-	}
-	a, ok := parsed.has("a")
-	if !ok || a.str != "значение // не комментарий" {
-		t.Errorf("a = %v, ok = %v", a, ok)
-	}
-	b, _ := parsed.has("b")
-	if len(b.items) != 3 {
-		t.Errorf("b.items = %d, ожидалось 3", len(b.items))
-	}
-	c, _ := parsed.has("c")
-	if _, ok := c.has("d"); !ok {
-		t.Error("c.d отсутствует")
-	}
-}
+// Тесты семантики чтения записей (формы записи, секции, отвержение ошибочных)
+// идут напрямую на дереве value — без участия фронтендов форматов. Фронтенды
+// покрываются format_jsonc_test.go и format_yaml_test.go, выбор формата по
+// расширению файла — format_test.go.
 
-func TestParseJsoncText_RootProblems(t *testing.T) {
-	if _, err := ParseJsoncText("{ не json"); err == nil {
-		t.Error("ожидалась ошибка некорректного JSONC")
-	}
-	if _, err := ParseJsoncText("[1, 2]"); err == nil {
+// Конструкторы дерева value для тестов читателя.
+func str(s string) value       { return value{kind: kindString, str: s} }
+func num(text string) value    { return value{kind: kindNumber, num: text} }
+func boolean(b bool) value     { return value{kind: kindBool, boolean: b} }
+func null() value              { return value{kind: kindNull} }
+func arr(items ...value) value { return value{kind: kindArray, items: items} }
+func obj(ms ...member) value   { return value{kind: kindObject, members: ms} }
+
+func TestParseRoot_RootProblems(t *testing.T) {
+	if _, err := parseRoot(arr(num("1"), num("2"))); err == nil {
 		t.Error("ожидалась ошибка: корень не объект")
 	}
-	if _, err := ParseJsoncText("{}"); err == nil {
+	if _, err := parseRoot(obj()); err == nil {
 		t.Error("ожидалась ошибка: нет ключа transistors")
 	}
-	if _, err := ParseJsoncText("{\"transistors\": {}}"); err == nil {
+	if _, err := parseRoot(obj(member{"transistors", obj()})); err == nil {
 		t.Error("ожидалась ошибка: transistors не массив")
 	}
 }
 
-func TestParseJsoncText_UnknownRootKey_ProducesIssue(t *testing.T) {
-	result, err := ParseJsoncText("{\"extra\": 1, \"transistors\": []}")
+func TestParseRoot_UnknownRootKey_ProducesIssue(t *testing.T) {
+	result, err := parseRoot(obj(member{"extra", num("1")}, member{"transistors", arr()}))
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
 	if !result.HasErrors() {
 		t.Fatal("ожидалась проблема")
 	}
-	if got := result.Issues[0].Description; got != "неизвестный ключ корневого объекта «extra» (допустим только \"transistors\")" {
-		t.Errorf("текст проблемы = %q", got)
+	want := "неизвестный ключ корневого объекта «extra» (допустим только \"transistors\")"
+	if got := result.Issues[0].Description; got != want {
+		t.Errorf("текст проблемы = %q, ожидалось %q", got, want)
 	}
 }
 
-func TestParseJsoncText_StringEntry_AndKeyOrder(t *testing.T) {
-	result, err := ParseJsoncText("{\"transistors\": [\"КТ315Б\", 42]}")
+func TestParseRoot_StringEntry_AndKindDescription(t *testing.T) {
+	result, err := parseRoot(obj(member{"transistors", arr(str("КТ315Б"), num("42"))}))
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -79,9 +61,13 @@ func TestParseJsoncText_StringEntry_AndKeyOrder(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_MixedNameAndDesignationFields(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "letters": "Б"}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_MixedNameAndDesignationFields(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(member{"name", str("КТ315Б")}, member{"letters", str("Б")}),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -97,13 +83,18 @@ func TestParseJsoncText_MixedNameAndDesignationFields(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_DesignationFormEntry(t *testing.T) {
-	text := `{"transistors": [{
-		"material": "Г", "subclass": "Т", "assembly": false,
-		"feature": 1, "number": 15, "letters": "А",
-		"ratings": {"IkMax": 50, "tempMin": -40, "tempMax": 55}
-	}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_DesignationFormEntry(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(
+				member{"material", str("Г")}, member{"subclass", str("Т")},
+				member{"assembly", boolean(false)},
+				member{"feature", num("1")}, member{"number", num("15")}, member{"letters", str("А")},
+				member{"ratings", obj(member{"IkMax", num("50")}, member{"tempMin", num("-40")}, member{"tempMax", num("55")})},
+			),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -119,9 +110,16 @@ func TestParseJsoncText_DesignationFormEntry(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_SectionError_RejectsWholeEntry(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "parameters": [{"parameter": "h21e", "min": 50}]}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_SectionError_RejectsWholeEntry(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(
+				member{"name", str("КТ315Б")},
+				member{"parameters", arr(obj(member{"parameter", str("h21e")}, member{"min", num("50")}))},
+			),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -136,9 +134,13 @@ func TestParseJsoncText_SectionError_RejectsWholeEntry(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_EmptyParameterArray_ClearsSection(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "parameters": []}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_EmptyParameterArray_ClearsSection(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(member{"name", str("КТ315Б")}, member{"parameters", arr()}),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -154,9 +156,16 @@ func TestParseJsoncText_EmptyParameterArray_ClearsSection(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_ManufacturersNull_DoesNotChange(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "attributes": {"manufacturers": null, "structure": "npn"}}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_ManufacturersNull_DoesNotChange(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(
+				member{"name", str("КТ315Б")},
+				member{"attributes", obj(member{"manufacturers", null()}, member{"structure", str("npn")})},
+			),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -169,9 +178,18 @@ func TestParseJsoncText_ManufacturersNull_DoesNotChange(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_UnknownParameterCode(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "parameters": [{"parameter": "h21", "min": 50, "Uke": 10, "Ik": 1}]}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_UnknownParameterCode(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(
+				member{"name", str("КТ315Б")},
+				member{"parameters", arr(
+					obj(member{"parameter", str("h21")}, member{"min", num("50")}, member{"Uke", num("10")}, member{"Ik", num("1")}),
+				)},
+			),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
@@ -183,9 +201,13 @@ func TestParseJsoncText_UnknownParameterCode(t *testing.T) {
 	}
 }
 
-func TestParseJsoncText_RatingsValidation(t *testing.T) {
-	text := `{"transistors": [{"name": "КТ315Б", "ratings": {"IkPulseMax": 100}}]}`
-	result, err := ParseJsoncText(text)
+func TestParseRoot_RatingsValidation(t *testing.T) {
+	root := obj(
+		member{"transistors", arr(
+			obj(member{"name", str("КТ315Б")}, member{"ratings", obj(member{"IkPulseMax", num("100")})}),
+		)},
+	)
+	result, err := parseRoot(root)
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
