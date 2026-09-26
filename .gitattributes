@@ -1,0 +1,20 @@
+* text=auto
+
+# Исходный код и данные — всегда LF
+*.go    text eol=lf diff=go
+*.mod   text eol=lf
+*.sum   text eol=lf
+*.md    text eol=lf
+*.jsonc text eol=lf
+*.json  text eol=lf
+
+# Бинарные файлы — без нормализации концов строк
+*.db         binary
+*.db-journal binary
+*.db-wal     binary
+*.db-shm     binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary

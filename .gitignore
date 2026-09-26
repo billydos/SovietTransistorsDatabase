@@ -1,0 +1,20 @@
+# Рабочая база и служебные файлы SQLite (генерируются импортом, в репозиторий не входят)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Артефакты сборки и тестов Go
+/soviettransistors
+*.exe
+*.test
+*.out
+*.prof
+
+# Служебное состояние Agent Manager (восстановление UI, не конфигурация проекта)
+.kilo/agent-manager.json
+
+# ОС и IDE
+.DS_Store
+Thumbs.db
+.idea/
