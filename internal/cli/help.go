@@ -10,7 +10,7 @@ import (
 // describeParameters — раздел справки о параметрах: строки собираются из
 // каталога, а не дублируются вручную.
 func describeParameters() string {
-	lines := []string{"Электрические параметры (jsonc, ключ \"parameters\"), коды:"}
+	lines := []string{"Электрические параметры (jsonc/yaml, ключ \"parameters\"), коды:"}
 	for _, info := range domain.ParameterCatalog {
 		unit := info.Unit
 		if unit == "" {
@@ -46,7 +46,7 @@ func printHelp() int {
 
 Команды:
   init                                  создать таблицы (команды записи создают базу автоматически)
-  import <файл.jsonc>                   импорт: обозначения, атрибуты, параметры, предельные данные
+  import <файл.jsonc|.yaml>             импорт: обозначения, атрибуты, параметры, предельные данные
   add <обозначение> [<обозначение>...]  добавить транзисторы по обозначению (через парсер)
   parse <обозначение>...                разобрать обозначение без обращения к базе
   list [фильтры]                        вывести обозначения из базы
@@ -83,11 +83,11 @@ func printHelp() int {
   бескорпусное исполнение: дефис и цифра 1–6`)
 	fmt.Println()
 	fmt.Println(describeParameters())
-	fmt.Println(`Атрибуты (jsonc, ключ "attributes"): structure (npn/pnp/n-fet...), technology, package,
+	fmt.Println(`Атрибуты (jsonc/yaml, ключ "attributes"): structure (npn/pnp/n-fet...), technology, package,
   packageMaterial, colorMarking, pinout, esdSensitive/militaryGrade/radiationHardened (bool),
   tu, notes, yearFrom/yearTo (1949–2100), massMax (г), datasheetUrl;
   manufacturers — массив названий заводов (null — не менять, [] — очистить).
-Предельные данные (jsonc, ключ "ratings"): UkeMax/UkbMax/UbeMax/UkeoMax (В), IkMax/IbMax (мА),
+Предельные данные (jsonc/yaml, ключ "ratings"): UkeMax/UkbMax/UbeMax/UkeoMax (В), IkMax/IbMax (мА),
   PkMax (мВт), IkPulseMax/PkPulseMax + pulseDuration (мкс), tempMin/tempMax/tempJunctionMax (°C),
   Rth (°C/Вт).`)
 	return 0

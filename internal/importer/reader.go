@@ -2,16 +2,15 @@ package importer
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
 	"soviettransistors/internal/domain"
 )
 
-// JsoncIssue — проблема разбора jsonc: EntryIndex = 0 — ошибка корневого уровня
-// файла, иначе номер записи (с 1). Source = "" — источник не задан.
-type JsoncIssue struct {
+// Issue — проблема разбора файла импорта: EntryIndex = 0 — ошибка корневого
+// уровня файла, иначе номер записи (с 1). Source = "" — источник не задан.
+type Issue struct {
 	EntryIndex  int
 	Description string
 	Source      string
@@ -27,12 +26,12 @@ type TransistorEntryData struct {
 	Ratings       *domain.MaximumRatings
 }
 
-type JsoncParseResult struct {
+type ParseResult struct {
 	Entries []TransistorEntryData
-	Issues  []JsoncIssue
+	Issues  []Issue
 }
 
-func (r *JsoncParseResult) HasErrors() bool { return len(r.Issues) > 0 }
+func (r *ParseResult) HasErrors() bool { return len(r.Issues) > 0 }
 
 var (
 	designationFields         = []string{"material", "subclass", "assembly", "feature", "number", "letters", "modification", "chip"}
@@ -70,29 +69,17 @@ func stringSet(values []string) map[string]bool {
 	return set
 }
 
-// ParseJsoncFile читает и разбирает jsonc-файл. Ошибки файловой системы
-// возвращаются как есть; некорректный формат — *domain.UserError.
-func ParseJsoncFile(path string) (*JsoncParseResult, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return ParseJsoncText(string(data))
-}
+// parseRoot разбирает корень дерева значений любого формата: объект с ключом
+// "transistors" — массив записей. Ошибки структуры корня — *domain.UserError.
+func parseRoot(root value) (*ParseResult, error) {
+	result := &ParseResult{}
 
-func ParseJsoncText(text string) (*JsoncParseResult, error) {
-	result := &JsoncParseResult{}
-
-	root, err := parseJsoncToValue(text)
-	if err != nil {
-		return nil, domain.NewUserError("файл не является корректным JSONC: %s", err.Error())
-	}
-	if root.kind != jsonObject {
+	if root.kind != kindObject {
 		return nil, domain.NewUserError(`корневой элемент должен быть объектом вида { "transistors": [ ... ] }`)
 	}
 	for _, member := range root.members {
 		if member.name != "transistors" {
-			result.Issues = append(result.Issues, JsoncIssue{
+			result.Issues = append(result.Issues, Issue{
 				Description: fmt.Sprintf("неизвестный ключ корневого объекта «%s» (допустим только \"transistors\")", member.name),
 			})
 		}
@@ -101,7 +88,7 @@ func ParseJsoncText(text string) (*JsoncParseResult, error) {
 	if !ok {
 		return nil, domain.NewUserError("отсутствует обязательный ключ \"transistors\"")
 	}
-	if array.kind != jsonArray {
+	if array.kind != kindArray {
 		return nil, domain.NewUserError("\"transistors\" должен быть массивом")
 	}
 
@@ -111,15 +98,15 @@ func ParseJsoncText(text string) (*JsoncParseResult, error) {
 	return result, nil
 }
 
-func readEntry(entry jsonValue, index int, result *JsoncParseResult) {
-	if entry.kind == jsonString {
+func readEntry(entry value, index int, result *ParseResult) {
+	if entry.kind == kindString {
 		if transistor, ok := tryReadName(entry.str, index, result); ok {
 			result.Entries = append(result.Entries, TransistorEntryData{Transistor: transistor})
 		}
 		return
 	}
-	if entry.kind != jsonObject {
-		result.Issues = append(result.Issues, JsoncIssue{
+	if entry.kind != kindObject {
+		result.Issues = append(result.Issues, Issue{
 			EntryIndex:  index,
 			Description: fmt.Sprintf("запись должна быть строкой (обозначение) или объектом, получено: %s", describeKind(entry)),
 		})
@@ -130,7 +117,7 @@ func readEntry(entry jsonValue, index int, result *JsoncParseResult) {
 
 	keyProblems := checkEntryKeys(entry, hasName)
 	if len(keyProblems) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: strings.Join(keyProblems, "; ")})
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: strings.Join(keyProblems, "; ")})
 		return
 	}
 
@@ -138,8 +125,8 @@ func readEntry(entry jsonValue, index int, result *JsoncParseResult) {
 	var ok bool
 	if hasName {
 		nameProperty, _ := entry.has("name")
-		if nameProperty.kind != jsonString {
-			result.Issues = append(result.Issues, JsoncIssue{
+		if nameProperty.kind != kindString {
+			result.Issues = append(result.Issues, Issue{
 				EntryIndex:  index,
 				Description: "\"name\" должно быть строкой с обозначением транзистора",
 			})
@@ -180,19 +167,19 @@ func readEntry(entry jsonValue, index int, result *JsoncParseResult) {
 	})
 }
 
-func tryReadName(name string, index int, result *JsoncParseResult) (domain.Transistor, bool) {
+func tryReadName(name string, index int, result *ParseResult) (domain.Transistor, bool) {
 	transistor, message, ok := domain.TryParseDesignation(name)
 	if ok {
 		return transistor, true
 	}
-	result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: message, Source: name})
+	result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: message, Source: name})
 	return domain.Transistor{}, false
 }
 
 // checkEntryKeys — единая для обеих форм объекта-записи проверка допустимых ключей:
 // форма "name" допускает "name" и секции деталей, форма явных полей — поля
 // обозначения и секции деталей. Поле обозначения рядом с "name" — смешение форм.
-func checkEntryKeys(entry jsonValue, hasName bool) []string {
+func checkEntryKeys(entry value, hasName bool) []string {
 	allowed := nameFormFields
 	if !hasName {
 		allowed = designationFormFields
@@ -215,7 +202,7 @@ func checkEntryKeys(entry jsonValue, hasName bool) []string {
 	return problems
 }
 
-func readDesignationFields(entry jsonValue, index int, result *JsoncParseResult) (domain.Transistor, bool) {
+func readDesignationFields(entry value, index int, result *ParseResult) (domain.Transistor, bool) {
 	var problems []string
 
 	for _, required := range requiredDesignationFields {
@@ -234,7 +221,7 @@ func readDesignationFields(entry jsonValue, index int, result *JsoncParseResult)
 	chip := readOptionalIntField(entry, "chip", func(v int) bool { return v >= 1 && v <= 6 }, "цифра от 1 до 6", &problems)
 
 	if len(problems) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: strings.Join(problems, "; ")})
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: strings.Join(problems, "; ")})
 		return domain.Transistor{}, false
 	}
 
@@ -250,9 +237,9 @@ func readDesignationFields(entry jsonValue, index int, result *JsoncParseResult)
 	}, true
 }
 
-func readAttributes(element jsonValue, index int, result *JsoncParseResult) (*domain.TransistorAttributes, []string) {
-	if element.kind != jsonObject {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: "\"attributes\" должно быть объектом"})
+func readAttributes(element value, index int, result *ParseResult) (*domain.TransistorAttributes, []string) {
+	if element.kind != kindObject {
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: "\"attributes\" должно быть объектом"})
 		return nil, nil
 	}
 	var problems []string
@@ -283,14 +270,14 @@ func readAttributes(element jsonValue, index int, result *JsoncParseResult) (*do
 
 	var manufacturers []string
 	if manufacturersElement, ok := element.has("manufacturers"); ok {
-		if manufacturersElement.kind == jsonNull {
+		if manufacturersElement.kind == kindNull {
 			// null — список производителей не меняется
-		} else if manufacturersElement.kind != jsonArray {
+		} else if manufacturersElement.kind != kindArray {
 			problems = append(problems, "\"manufacturers\" должно быть массивом строк")
 		} else {
 			manufacturers = []string{}
 			for number, item := range manufacturersElement.items {
-				if item.kind != jsonString || strings.TrimSpace(item.str) == "" {
+				if item.kind != kindString || strings.TrimSpace(item.str) == "" {
 					problems = append(problems, fmt.Sprintf("\"manufacturers\" №%d: ожидалось непустое название производителя", number+1))
 				} else {
 					manufacturers = append(manufacturers, strings.TrimSpace(item.str))
@@ -301,19 +288,19 @@ func readAttributes(element jsonValue, index int, result *JsoncParseResult) (*do
 
 	problems = append(problems, domain.ValidateTransistorAttributes(attributes)...)
 	if len(problems) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: "атрибуты: " + strings.Join(problems, "; ")})
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: "атрибуты: " + strings.Join(problems, "; ")})
 		return nil, nil
 	}
 	return attributes, manufacturers
 }
 
-func readParameters(entry jsonValue, index int, result *JsoncParseResult) []domain.ElectricalParameter {
+func readParameters(entry value, index int, result *ParseResult) []domain.ElectricalParameter {
 	array, ok := entry.has("parameters")
 	if !ok {
 		return nil
 	}
-	if array.kind != jsonArray {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: "\"parameters\" должно быть массивом объектов"})
+	if array.kind != kindArray {
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: "\"parameters\" должно быть массивом объектов"})
 		return nil
 	}
 	parameters := []domain.ElectricalParameter{}
@@ -333,9 +320,9 @@ func readParameters(entry jsonValue, index int, result *JsoncParseResult) []doma
 	return parameters
 }
 
-func readParameterItem(item jsonValue, entryIndex, parameterNumber int, result *JsoncParseResult) (domain.ElectricalParameter, bool) {
-	if item.kind != jsonObject {
-		result.Issues = append(result.Issues, JsoncIssue{
+func readParameterItem(item value, entryIndex, parameterNumber int, result *ParseResult) (domain.ElectricalParameter, bool) {
+	if item.kind != kindObject {
+		result.Issues = append(result.Issues, Issue{
 			EntryIndex:  entryIndex,
 			Description: fmt.Sprintf("параметр №%d: должен быть объектом", parameterNumber),
 		})
@@ -352,7 +339,7 @@ func readParameterItem(item jsonValue, entryIndex, parameterNumber int, result *
 
 	var kind domain.ParameterKind
 	code := ""
-	if kindElement, ok := item.has("parameter"); ok && kindElement.kind == jsonString {
+	if kindElement, ok := item.has("parameter"); ok && kindElement.kind == kindString {
 		code = strings.TrimSpace(kindElement.str)
 		if _, ok := domain.TryParameterKindByCode(code); !ok {
 			problems = append(problems, fmt.Sprintf("\"parameter\": неизвестный код «%s» (допустимы: %s)", code, domain.ParameterCodesList()))
@@ -381,7 +368,7 @@ func readParameterItem(item jsonValue, entryIndex, parameterNumber int, result *
 	}
 
 	if code == "" || len(problems) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{
+		result.Issues = append(result.Issues, Issue{
 			EntryIndex:  entryIndex,
 			Description: fmt.Sprintf("параметр №%d: %s", parameterNumber, strings.Join(problems, "; ")),
 		})
@@ -389,7 +376,7 @@ func readParameterItem(item jsonValue, entryIndex, parameterNumber int, result *
 	}
 
 	if errors := domain.ValidateElectricalParameter(parameter); len(errors) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{
+		result.Issues = append(result.Issues, Issue{
 			EntryIndex:  entryIndex,
 			Description: fmt.Sprintf("параметр №%d (%s): %s", parameterNumber, code, strings.Join(errors, "; ")),
 		})
@@ -398,13 +385,13 @@ func readParameterItem(item jsonValue, entryIndex, parameterNumber int, result *
 	return parameter, true
 }
 
-func readRatings(entry jsonValue, index int, result *JsoncParseResult) *domain.MaximumRatings {
+func readRatings(entry value, index int, result *ParseResult) *domain.MaximumRatings {
 	element, ok := entry.has("ratings")
 	if !ok {
 		return nil
 	}
-	if element.kind != jsonObject {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: "\"ratings\" должно быть объектом"})
+	if element.kind != kindObject {
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: "\"ratings\" должно быть объектом"})
 		return nil
 	}
 	var problems []string
@@ -432,18 +419,18 @@ func readRatings(entry jsonValue, index int, result *JsoncParseResult) *domain.M
 	}
 	problems = append(problems, domain.ValidateMaximumRatings(ratings)...)
 	if len(problems) > 0 {
-		result.Issues = append(result.Issues, JsoncIssue{EntryIndex: index, Description: "предельные данные: " + strings.Join(problems, "; ")})
+		result.Issues = append(result.Issues, Issue{EntryIndex: index, Description: "предельные данные: " + strings.Join(problems, "; ")})
 		return nil
 	}
 	return ratings
 }
 
-func readOptionalTrimmedString(element jsonValue, field string, problems *[]string) *string {
+func readOptionalTrimmedString(element value, field string, problems *[]string) *string {
 	value, ok := element.has(field)
-	if !ok || value.kind == jsonNull {
+	if !ok || value.kind == kindNull {
 		return nil
 	}
-	if value.kind != jsonString {
+	if value.kind != kindString {
 		*problems = append(*problems, fmt.Sprintf("\"%s\" должно быть строкой", field))
 		return nil
 	}
@@ -451,13 +438,13 @@ func readOptionalTrimmedString(element jsonValue, field string, problems *[]stri
 	return &trimmed
 }
 
-func readOptionalBool(element jsonValue, field string, problems *[]string) *bool {
+func readOptionalBool(element value, field string, problems *[]string) *bool {
 	value, ok := element.has(field)
-	if !ok || value.kind == jsonNull {
+	if !ok || value.kind == kindNull {
 		return nil
 	}
 	switch value.kind {
-	case jsonBool:
+	case kindBool:
 		return &value.boolean
 	default:
 		*problems = append(*problems, fmt.Sprintf("\"%s\" должно быть true или false", field))
@@ -465,9 +452,9 @@ func readOptionalBool(element jsonValue, field string, problems *[]string) *bool
 	}
 }
 
-func readOptionalInt(element jsonValue, field string, problems *[]string) *int {
+func readOptionalInt(element value, field string, problems *[]string) *int {
 	value, ok := element.has(field)
-	if !ok || value.kind == jsonNull {
+	if !ok || value.kind == kindNull {
 		return nil
 	}
 	if number, ok := intValue(value); ok {
@@ -477,12 +464,12 @@ func readOptionalInt(element jsonValue, field string, problems *[]string) *int {
 	return nil
 }
 
-func readOptionalNumber(element jsonValue, field string, problems *[]string) *float64 {
+func readOptionalNumber(element value, field string, problems *[]string) *float64 {
 	value, ok := element.has(field)
-	if !ok || value.kind == jsonNull {
+	if !ok || value.kind == kindNull {
 		return nil
 	}
-	if value.kind == jsonNumber {
+	if value.kind == kindNumber {
 		if number, err := strconv.ParseFloat(value.num, 64); err == nil {
 			return &number
 		}
@@ -493,8 +480,8 @@ func readOptionalNumber(element jsonValue, field string, problems *[]string) *fl
 
 // intValue — целое значение json-числа (текст без дробной части и экспоненты,
 // в диапазоне int32), как JsonElement.TryGetInt32.
-func intValue(value jsonValue) (int, bool) {
-	if value.kind != jsonNumber {
+func intValue(value value) (int, bool) {
+	if value.kind != kindNumber {
 		return 0, false
 	}
 	number, err := strconv.ParseInt(value.num, 10, 32)
@@ -504,13 +491,13 @@ func intValue(value jsonValue) (int, bool) {
 	return int(number), true
 }
 
-func readCharField(entry jsonValue, field string, isValid func(rune) bool, expected string, problems *[]string) rune {
+func readCharField(entry value, field string, isValid func(rune) bool, expected string, problems *[]string) rune {
 	element, ok := entry.has(field)
 	if !ok {
 		return 0
 	}
 	var value *string
-	if element.kind == jsonString {
+	if element.kind == kindString {
 		value = &element.str
 	}
 	if value == nil || len([]rune(*value)) != 1 || !isValid([]rune(*value)[0]) {
@@ -524,19 +511,19 @@ func readCharField(entry jsonValue, field string, isValid func(rune) bool, expec
 	return []rune(*value)[0]
 }
 
-func readBoolField(entry jsonValue, field string, problems *[]string) bool {
+func readBoolField(entry value, field string, problems *[]string) bool {
 	element, ok := entry.has(field)
-	if !ok || element.kind == jsonNull {
+	if !ok || element.kind == kindNull {
 		return false
 	}
-	if element.kind == jsonBool {
+	if element.kind == kindBool {
 		return element.boolean
 	}
 	*problems = append(*problems, fmt.Sprintf("\"%s\" должно быть true или false", field))
 	return false
 }
 
-func readIntField(entry jsonValue, field string, isValid func(int) bool, expected string, problems *[]string) int {
+func readIntField(entry value, field string, isValid func(int) bool, expected string, problems *[]string) int {
 	element, ok := entry.has(field)
 	if !ok {
 		return 0
@@ -553,9 +540,9 @@ func readIntField(entry jsonValue, field string, isValid func(int) bool, expecte
 	return value
 }
 
-func readOptionalIntField(entry jsonValue, field string, isValid func(int) bool, expected string, problems *[]string) *int {
+func readOptionalIntField(entry value, field string, isValid func(int) bool, expected string, problems *[]string) *int {
 	element, ok := entry.has(field)
-	if !ok || element.kind == jsonNull {
+	if !ok || element.kind == kindNull {
 		return nil
 	}
 	value, ok := intValue(element)
@@ -570,13 +557,13 @@ func readOptionalIntField(entry jsonValue, field string, isValid func(int) bool,
 	return &value
 }
 
-func readLettersField(entry jsonValue, problems *[]string) string {
+func readLettersField(entry value, problems *[]string) string {
 	element, ok := entry.has("letters")
 	if !ok {
 		return ""
 	}
 	var value *string
-	if element.kind == jsonString {
+	if element.kind == kindString {
 		value = &element.str
 	}
 	if value == nil || !domain.IsUpperLetters(*value) {
@@ -590,22 +577,22 @@ func readLettersField(entry jsonValue, problems *[]string) string {
 	return *value
 }
 
-func describeKind(value jsonValue) string {
+func describeKind(value value) string {
 	switch value.kind {
-	case jsonNumber:
+	case kindNumber:
 		return "число"
-	case jsonBool:
+	case kindBool:
 		if value.boolean {
 			return "true"
 		}
 		return "false"
-	case jsonNull:
+	case kindNull:
 		return "null"
-	case jsonArray:
+	case kindArray:
 		return "массив"
-	case jsonString:
+	case kindString:
 		return "String"
-	case jsonObject:
+	case kindObject:
 		return "Object"
 	}
 	return "неизвестный тип"

@@ -82,7 +82,7 @@ func cmdAdd(names []string, dbPath string, dbSet bool, dryRun bool) (int, error)
 
 func cmdImport(files []string, dbPath string, dbSet bool, dryRun bool) (int, error) {
 	if len(files) == 0 {
-		fmt.Fprintln(os.Stderr, "Укажите путь к jsonc-файлу, например: import sample-data.jsonc")
+		fmt.Fprintln(os.Stderr, "Укажите путь к файлу импорта (.jsonc, .json, .yaml, .yml), например: import sample-data.jsonc")
 		return 1, nil
 	}
 	if len(files) > 1 {
@@ -95,7 +95,7 @@ func cmdImport(files []string, dbPath string, dbSet bool, dryRun bool) (int, err
 		return 1, nil
 	}
 
-	parsed, err := importer.ParseJsoncFile(path)
+	parsed, err := importer.ParseFile(path)
 	if err != nil {
 		return 1, err
 	}

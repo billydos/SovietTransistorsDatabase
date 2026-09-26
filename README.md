@@ -2,7 +2,7 @@
 
 Консольная утилита на Go для ведения локальной базы справочника советских полупроводниковых приборов. Хранит структуру обозначения (ГОСТ 10862-64), электрические параметры с условиями измерения, предельные эксплуатационные данные и описательные атрибуты (проводимость, корпус, технология, производитель, годы выпуска и др.). База - SQLite (UTF-8), с заделом на будущий перенос на PostgreSQL/MariaDB.
 
-Наполнение двумя способами: импортом из структурированного jsonc-файла или напрямую парсером обозначений.
+Наполнение двумя способами: импортом из структурированного файла (jsonc или yaml) или напрямую парсером обозначений.
 
 ## Возможности
 
@@ -14,19 +14,19 @@
 
 ## Быстрый старт
 
-Требуется Go 1.27+ (единственная внешняя зависимость `modernc.org/sqlite` — pure Go, без cgo).
+Требуется Go 1.27+ (зависимости `modernc.org/sqlite`, `tailscale/hujson`, `goccy/go-yaml` — pure Go, без cgo).
 
 ```shell
 # сборка и проверка работоспособности
-go run ./cmd/soviettransistors -- parse КТ315Б
+go run ./cmd/soviettransistors parse КТ315Б
 
 # наполнение базы из файла с примерами (20 транзисторов)
-go run ./cmd/soviettransistors -- import ../SovietTransistorsDatabase/sample-data.jsonc
+go run ./cmd/soviettransistors import sample-data.jsonc
 
 # просмотр
-go run ./cmd/soviettransistors -- count
-go run ./cmd/soviettransistors -- list
-go run ./cmd/soviettransistors -- info КТ315Б
+go run ./cmd/soviettransistors count
+go run ./cmd/soviettransistors list
+go run ./cmd/soviettransistors info КТ315Б
 ```
 
 ## Команды
@@ -34,7 +34,7 @@ go run ./cmd/soviettransistors -- info КТ315Б
 | Команда | Назначение |
 |---|---|
 | `init` | создать таблицы (при командах записи — автоматически) |
-| `import <файл.jsonc>` | импорт транзисторов со всеми данными |
+| `import <файл.jsonc\|.yaml>` | импорт транзисторов со всеми данными (формат — по расширению: .jsonc/.json, .yaml/.yml) |
 | `add <обозначение>...` | добавить транзисторы по обозначению (через парсер) |
 | `parse <обозначение>...` | разобрать обозначение без обращения к базе |
 | `list [фильтры]` | список обозначений; фильтры: `--material=Г`, `--subclass=П`, `--letters=АМ`, `--limit=N` и др. |
@@ -48,9 +48,9 @@ go run ./cmd/soviettransistors -- info КТ315Б
 Примеры:
 
 ```shell
-go run ./cmd/soviettransistors -- add ГТ404А КП303Е
-go run ./cmd/soviettransistors -- list --material=1 --subclass=Т
-go run ./cmd/soviettransistors -- info 2Т914А-1
+go run ./cmd/soviettransistors add ГТ404А КП303Е
+go run ./cmd/soviettransistors list --material=1 --subclass=Т
+go run ./cmd/soviettransistors info 2Т914А-1
 go run ./cmd/soviettransistors -- find 2Т312В
 ```
 
@@ -59,7 +59,7 @@ go run ./cmd/soviettransistors -- find 2Т312В
 `list` - таблица обозначений (с фильтрами и `--limit`):
 
 ```text
-$ go run ./cmd/soviettransistors -- list --limit=3
+$ go run ./cmd/soviettransistors list --limit=3
 Обозначение  Материал    Подкл.  Сборка  Признак  №   Буквы  Мод.  Бескорп.
 -----------  ----------  ------  ------  -------  --  -----  ----  --------
 КП302А       К кремний   П       —       3        02  А      —     —
@@ -71,7 +71,7 @@ $ go run ./cmd/soviettransistors -- list --limit=3
 `info` - полная карточка транзистора (данные КТ315Б и КТ3107В - по справочнику eandc.ru):
 
 ```text
-$ go run ./cmd/soviettransistors -- info КТ315Б
+$ go run ./cmd/soviettransistors info КТ315Б
 Обозначение:      КТ315Б
 Материал:         К — кремний (К/2)
 Подкласс:         Т — биполярный
@@ -110,7 +110,7 @@ $ go run ./cmd/soviettransistors -- info КТ315Б
 `find` - поиск по точному обозначению. Записи `КТ315Б` и `2Т315Б` раздельные (у каждой свои данные); при отсутствии точной записи выводится подсказка о равнозначной по материалу:
 
 ```text
-$ go run ./cmd/soviettransistors -- find 2Т312В
+$ go run ./cmd/soviettransistors find 2Т312В
 Не найдено: 2Т312В
 Есть равнозначная по материалу запись: КТ312В (символы Г/1, К/2, А/3, И/4 обозначают один материал, но записи раздельные)
 ```
@@ -118,7 +118,7 @@ $ go run ./cmd/soviettransistors -- find 2Т312В
 `add` - добавление по обозначению: новые транзисторы, раздельная запись `2Т315Б` при существующем `КТ315Б`, дубликат и старая система «П...» (не поддерживается):
 
 ```text
-$ go run ./cmd/soviettransistors -- add КТ361А 2Т315Б КТ315Б МП16А
+$ go run ./cmd/soviettransistors add КТ361А 2Т315Б КТ315Б МП16А
 МП16А: позиция 1: ожидался тип материала — Г или 1 (германий), К или 2 (кремний), А или 3 (арсенид галлия), И или 4 (индий), получено «М»
 Добавлено: КТ361А
 Добавлено: 2Т315Б
@@ -126,9 +126,9 @@ $ go run ./cmd/soviettransistors -- add КТ361А 2Т315Б КТ315Б МП16А
 Итого: добавлено 2, пропущено 1, ошибок разбора 1
 ```
 
-## Формат jsonc
+## Формат импорта (jsonc/yaml)
 
-Корень - объект с массивом `transistors`. Запись - строка, объект с `name` или объект с явными полями обозначения. Секции `attributes`, `parameters`, `ratings` необязательны: отсутствует - не меняется, задана - заменяется целиком.
+Корень - объект с массивом `transistors`. Запись - строка, объект с `name` или объект с явными полями обозначения. Секции `attributes`, `parameters`, `ratings` необязательны: отсутствует - не меняется, задана - заменяется целиком. Те же данные можно писать в yaml (`.yaml`/`.yml`): структура и семантика идентичны, числа - без кавычек, `null` - «не менять».
 
 ```jsonc
 {
@@ -191,10 +191,10 @@ $ go run ./cmd/soviettransistors -- add КТ361А 2Т315Б КТ315Б МП16А
 Полный справочник кодов параметров, правил условий, единиц измерения и полей секций:
 
 ```shell
-go run ./cmd/soviettransistors -- help
+go run ./cmd/soviettransistors help
 ```
 
-а также файл `../SovietTransistorsDatabase/sample-data.jsonc` (полный пример) и регламент `SKILL.md`.
+а также файлы `sample-data.jsonc` / `sample-data.yaml` (полные примеры одной и той же выборки) и регламент `SKILL.md`.
 
 ## Сборка и публикация
 
@@ -216,7 +216,7 @@ GOOS=linux GOARCH=arm64 go build -o soviettransistors-arm64 ./cmd/soviettransist
 cmd/soviettransistors/   точка входа (main)
 internal/domain/         обозначения, каталог параметров, ratings, атрибуты, валидация
 internal/storage/        переносимое реляционное ядро на database/sql + SQLite-диалект (DDL)
-internal/importer/       чтение jsonc (стриппер, упорядоченный разбор, валидация секций)
+internal/importer/       реестр форматов импорта (jsonc/json — hujson, yaml/yml — goccy/go-yaml), упорядоченный разбор, валидация секций
 internal/cli/            разбор аргументов, команды, вывод, справка
 ```
 

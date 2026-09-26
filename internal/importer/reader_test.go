@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestJsoncToJSON_CommentsAndTrailingCommas(t *testing.T) {
+func TestParseJsonc_CommentsAndTrailingCommas(t *testing.T) {
 	source := `{
 		// строкный комментарий
 		"a": "значение // не комментарий", /* блочный
@@ -13,22 +13,22 @@ func TestJsoncToJSON_CommentsAndTrailingCommas(t *testing.T) {
 		"b": [1, 2, 3,],
 		"c": {"d": "e",},
 	}`
-	value, err := parseJsoncToValue(source)
+	parsed, err := parseJsonc([]byte(source))
 	if err != nil {
 		t.Fatalf("разбор не удался: %v", err)
 	}
-	if value.kind != jsonObject {
-		t.Fatalf("корень не объект: %v", value.kind)
+	if parsed.kind != kindObject {
+		t.Fatalf("корень не объект: %v", parsed.kind)
 	}
-	a, ok := value.has("a")
+	a, ok := parsed.has("a")
 	if !ok || a.str != "значение // не комментарий" {
 		t.Errorf("a = %v, ok = %v", a, ok)
 	}
-	b, _ := value.has("b")
+	b, _ := parsed.has("b")
 	if len(b.items) != 3 {
 		t.Errorf("b.items = %d, ожидалось 3", len(b.items))
 	}
-	c, _ := value.has("c")
+	c, _ := parsed.has("c")
 	if _, ok := c.has("d"); !ok {
 		t.Error("c.d отсутствует")
 	}
